@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const Dashboard = ({ scheduleVersionId }) => {
     const [stats, setStats] = useState(null);
@@ -16,7 +16,20 @@ const Dashboard = ({ scheduleVersionId }) => {
         setLoading(true);
         try {
             const res = await axios.get(`http://localhost:8000/reporting/dashboard/${scheduleVersionId}`);
-            setStats(res.data);
+
+            // Also fetch Cycle Times
+            let cycleTimes = [];
+            try {
+                const ctRes = await axios.get(`http://localhost:8000/analytics/cycle-times/${scheduleVersionId}`);
+                cycleTimes = ctRes.data;
+            } catch (e) {
+                console.warn("Cycle Times fetch failed");
+            }
+
+            setStats({
+                ...res.data,
+                cycle_times: cycleTimes
+            });
         } catch (e) {
             console.error("Failed to fetch dashboard stats", e);
         } finally {
@@ -54,8 +67,8 @@ const Dashboard = ({ scheduleVersionId }) => {
                 </div>
             </div>
 
-            {/* Charts */}
-            <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg h-96">
+            {/* Charts Row 1 */}
+            <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg h-96 mb-8">
                 <h3 className="text-lg font-bold text-white mb-4">Production by Period</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -74,6 +87,46 @@ const Dashboard = ({ scheduleVersionId }) => {
                         <Bar dataKey="waste" name="Waste" stackId="a" fill="#ef4444" />
                     </BarChart>
                 </ResponsiveContainer>
+            </div>
+
+            {/* Cycle Time Analytics */}
+            <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-white">Truck Cycle Times vs Distance</h3>
+                    <button
+                        onClick={() => {
+                            // Simple CSV Export Logic
+                            if (!stats.cycle_times) return;
+                            const headers = ["Task ID", "Block", "Destination", "Distance (m)", "Cycle Time (min)", "Throughput (t/h)"];
+                            const rows = stats.cycle_times.map(r => [
+                                r.task_id, r.block_name, r.destination, r.distance_m, r.cycle_time_min, r.potential_tph
+                            ]);
+                            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+                            const encodedUri = encodeURI(csvContent);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", encodedUri);
+                            link.setAttribute("download", "schedule_cycles.csv");
+                            document.body.appendChild(link);
+                            link.click();
+                        }}
+                        className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded border border-slate-600"
+                    >
+                        Export CSV
+                    </button>
+                </div>
+
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis type="number" dataKey="distance_m" name="Distance" unit="m" stroke="#94a3b8" />
+                            <YAxis type="number" dataKey="cycle_time_min" name="Cycle Time" unit="min" stroke="#94a3b8" />
+                            <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+                            <Legend />
+                            <Scatter name="Haul Routes" data={stats.cycle_times || []} fill="#f59e0b" />
+                        </ScatterChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
         </div>
     );
