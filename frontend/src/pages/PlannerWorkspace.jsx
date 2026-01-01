@@ -136,6 +136,31 @@ const PlannerWorkspace = () => {
                         <button className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded font-medium transition-colors">
                             Save Changes
                         </button>
+
+                        <button
+                            onClick={async () => {
+                                if (!siteData.activeScheduleId) return;
+                                setLoading(true);
+                                try {
+                                    const res = await axios.post('http://localhost:8000/optimization/run', {
+                                        site_id: siteData.siteId,
+                                        schedule_version_id: siteData.activeScheduleId
+                                    });
+                                    setNotification({ type: 'success', message: res.data.message });
+                                    // Refresh Gantt if active
+                                    // Note: GanttChart component fetches its own data, we might need to trigger a refresh via key or context.
+                                    // For now, reloading page is nuclear but safe for MVP.
+                                    setTimeout(() => window.location.reload(), 1500);
+                                } catch (e) {
+                                    setNotification({ type: 'error', message: 'Optimization Failed' });
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }}
+                            className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded font-medium transition-colors flex items-center"
+                        >
+                            <span className="mr-1">⚡</span> Auto-Schedule
+                        </button>
                     </div>
                 </header>
 
