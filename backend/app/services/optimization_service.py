@@ -1,31 +1,31 @@
 from sqlalchemy.orm import Session
-from ..domain import models_scheduling, models_resources, models_calendar
+from ..domain import models_scheduling, models_resource, models_time
 from datetime import datetime
 
 class OptimizationService:
     def run_greedy(self, db: Session, site_id: str, schedule_version_id: str):
         # 1. Fetch Resources (Excavators)
-        resources = db.query(models_resources.Resource)\
-            .filter(models_resources.Resource.site_id == site_id)\
-            .filter(models_resources.Resource.resource_type == "Excavator")\
+        resources = db.query(models_resource.Resource)\
+            .filter(models_resource.Resource.site_id == site_id)\
+            .filter(models_resource.Resource.resource_type == "Excavator")\
             .all()
             
         if not resources:
             return {"status": "error", "message": "No excavators found"}
 
         # 2. Fetch All Periods
-        calendar = db.query(models_calendar.Calendar).filter(models_calendar.Calendar.site_id == site_id).first()
+        calendar = db.query(models_time.Calendar).filter(models_time.Calendar.site_id == site_id).first()
         if not calendar:
             return {"status": "error", "message": "No calendar found"}
             
-        periods = db.query(models_calendar.Period)\
-            .filter(models_calendar.Period.calendar_id == calendar.calendar_id)\
-            .order_by(models_calendar.Period.start_datetime)\
+        periods = db.query(models_time.Period)\
+            .filter(models_time.Period.calendar_id == calendar.calendar_id)\
+            .order_by(models_time.Period.start_datetime)\
             .all()
 
         # 3. Fetch All Activity Areas & Build Topology
-        all_blocks = db.query(models_resources.ActivityArea)\
-            .filter(models_resources.ActivityArea.site_id == site_id)\
+        all_blocks = db.query(models_resource.ActivityArea)\
+            .filter(models_resource.ActivityArea.site_id == site_id)\
             .all()
             
         # Map: block_id -> block

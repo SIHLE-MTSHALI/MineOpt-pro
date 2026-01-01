@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import config_router, calendar_router, schedule_router, stockpile_router, reporting_router #, optimization_router, analytics_router
+from .routers import config_router, calendar_router, schedule_router, stockpile_router, reporting_router, optimization_router #, analytics_router
 
 app = FastAPI(title="MineOpt Pro Enterprise API")
 
@@ -15,8 +15,8 @@ app.add_middleware(
 app.include_router(config_router.router)
 app.include_router(calendar_router.router)
 app.include_router(schedule_router.router)
-# app.include_router(optimization_router.router)
-# app.include_router(reporting_router.router)
+app.include_router(optimization_router.router)
+# app.include_router(reporting_router.router) # Wait, reporting was enabled below. Keep order clean.
 app.include_router(stockpile_router.router)
 app.include_router(reporting_router.router)
 # app.include_router(analytics_router.router)
