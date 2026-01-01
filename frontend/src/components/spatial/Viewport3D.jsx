@@ -28,13 +28,13 @@ const Viewport3D = ({ siteData, onBlockSelect, selectedBlock }) => {
                     />
 
                     {/* Render Stockpiles */}
-                    <StockpileRenderer stockpiles={siteData.stockpiles} />
+                    <StockpileRenderer stockpiles={siteData.flowNodes || []} />
 
                     {/* Render Simulation (Active Tasks) */}
                     <HaulageRenderer
                         activeTasks={siteData.activeTasks}
                         activityAreas={siteData.activityAreas}
-                        stockpiles={siteData.stockpiles}
+                        stockpiles={siteData.flowNodes || []}
                     />
 
                     <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />

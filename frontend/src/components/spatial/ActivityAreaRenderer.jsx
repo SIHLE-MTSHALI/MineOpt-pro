@@ -42,7 +42,7 @@ const ActivityAreaRenderer = ({ areas = [], onSelect, selectedBlock }) => {
                     >
                         <boxGeometry args={[48, area.height || 10, 48]} />
                         <meshStandardMaterial
-                            color={isSelected ? "#fbbf24" : (area.color || (area.slice_states?.[0]?.material === 'Coal' ? '#3b82f6' : '#ef4444'))}
+                            color={isSelected ? "#fbbf24" : (area.color || (area.slice_states?.[0]?.material_name === 'Thermal Coal' ? '#0f172a' : '#ef4444'))}
                             roughness={0.7}
                             metalness={0.1}
                             emissive={isSelected ? "#fbbf24" : "black"}

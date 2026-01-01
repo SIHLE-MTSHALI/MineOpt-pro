@@ -115,6 +115,7 @@ def seed_enterprise_data(db: Session):
                 "status": "Available",
                 "quantity": 10000,
                 "material_type_id": mat_id,
+                "material_name": "Thermal Coal" if is_coal else "Overburden",
                 "qualities": {"CV_ARB": 24.0 if is_coal else 0, "Ash_ADB": 12.0 if is_coal else 80}
             }]
             
