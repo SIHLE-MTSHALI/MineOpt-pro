@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db, engine, Base
-from ..domain import models_core, models_time, models_resource, models_flow
+from ..domain import models_core, models_time, models_resource, models_flow, models_scheduling
 # from ..schemas import site_schemas
 from ..services import seed_service
 
@@ -10,13 +10,19 @@ models_core.Base.metadata.create_all(bind=engine)
 models_time.Base.metadata.create_all(bind=engine)
 models_resource.Base.metadata.create_all(bind=engine)
 models_flow.Base.metadata.create_all(bind=engine)
+models_scheduling.Base.metadata.create_all(bind=engine)
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
 @router.post("/seed-demo-data")
 def seed_data(db: Session = Depends(get_db)):
-    site_id = seed_service.seed_enterprise_data(db)
-    return {"message": "Enterprise Demo data seeded", "site_id": site_id}
+    result = seed_service.seed_enterprise_data(db)
+    # Result is now {"site_id": x, "version_id": y}
+    return {
+        "message": "Enterprise Demo data seeded", 
+        "site": {"name": "Enterprise Coal Mine", "site_id": result["site_id"]},
+        "version": {"version_id": result["version_id"]}
+    }
 
 @router.get("/sites")
 def get_sites(db: Session = Depends(get_db)):
