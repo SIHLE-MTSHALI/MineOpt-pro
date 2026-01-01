@@ -50,6 +50,13 @@ const PlannerWorkspace = () => {
                 const versions = schedRes.data;
                 const activeScheduleId = versions.length > 0 ? versions[0].version_id : null;
 
+                // 3b. Get Stockpiles
+                let stockpiles = [];
+                try {
+                    const stockRes = await axios.get(`http://localhost:8000/stockpiles?site_id=${siteId}`);
+                    stockpiles = stockRes.data;
+                } catch (e) { console.warn("Stockpiles fetch failed"); }
+
                 // 4. Get Calendar & Periods
                 let sitePeriods = [];
                 const calRes = await axios.get(`http://localhost:8000/calendar/site/${siteId}`);
@@ -64,7 +71,7 @@ const PlannerWorkspace = () => {
                 setSiteData({
                     siteId,
                     activityAreas: areas,
-                    stockpiles: [],
+                    stockpiles: stockpiles,
                     resources: resRes.data,
                     activeScheduleId,
                     periods: sitePeriods,

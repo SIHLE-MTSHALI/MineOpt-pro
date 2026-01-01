@@ -27,6 +27,10 @@ class FlowNode(Base):
     capacity_tonnes = Column(Float, nullable=True)
     inventory_tracking_enabled = Column(Boolean, default=False)
     
+    # Inventory State
+    current_tonnage = Column(Float, default=0.0)
+    current_grade = Column(Float, default=0.0) # Weighted Average
+    
     # 3D Context
     location_geometry = Column(JSON, nullable=True)
 
