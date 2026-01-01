@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db, engine, Base
-from ..domain import models_site, models_config, models_flow, models_resources
+from ..domain import models_site, models_config, models_flow, models_resources, models_scheduling, models_calendar
 from ..schemas import site_schemas
 from ..services import seed_service
 
@@ -10,6 +10,8 @@ models_site.Base.metadata.create_all(bind=engine)
 models_config.Base.metadata.create_all(bind=engine)
 models_flow.Base.metadata.create_all(bind=engine)
 models_resources.Base.metadata.create_all(bind=engine)
+models_scheduling.Base.metadata.create_all(bind=engine)
+models_calendar.Base.metadata.create_all(bind=engine)
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 

@@ -15,7 +15,8 @@ const PlannerWorkspace = () => {
         resources: [],
         activeScheduleId: null,
         periods: [],
-        versions: []
+        versions: [],
+        activeTasks: []
     });
 
     const [selectedBlock, setSelectedBlock] = useState(null);
@@ -66,7 +67,16 @@ const PlannerWorkspace = () => {
                     sitePeriods = perRes.data;
                 }
 
-                console.log("DEBUG: SiteData Loaded", { siteId, resources: resRes.data, activeScheduleId, periods: sitePeriods, versions });
+                // 5. Get Tasks for Simulation (active schedule)
+                let tasks = [];
+                if (activeScheduleId) {
+                    try {
+                        const tasksRes = await axios.get(`http://localhost:8000/schedule/versions/${activeScheduleId}/tasks`);
+                        tasks = tasksRes.data;
+                    } catch (e) { console.warn("Tasks fetch failed"); }
+                }
+
+                console.log("DEBUG: SiteData Loaded", { siteId, resources: resRes.data, activeScheduleId, periods: sitePeriods, versions, tasks });
 
                 setSiteData({
                     siteId,
@@ -75,7 +85,8 @@ const PlannerWorkspace = () => {
                     resources: resRes.data,
                     activeScheduleId,
                     periods: sitePeriods,
-                    versions: versions
+                    versions: versions,
+                    activeTasks: tasks
                 });
             } else {
                 console.warn("DEBUG: No sites found.");

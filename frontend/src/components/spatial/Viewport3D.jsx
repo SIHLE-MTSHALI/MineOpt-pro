@@ -4,6 +4,8 @@ import { OrbitControls, Grid, Environment, ContactShadows } from '@react-three/d
 import ActivityAreaRenderer from './ActivityAreaRenderer';
 import StockpileRenderer from './StockpileRenderer';
 
+import HaulageRenderer from './HaulageRenderer';
+
 const Viewport3D = ({ siteData, onBlockSelect, selectedBlock }) => {
     return (
         <div className="h-full w-full bg-slate-900">
@@ -27,6 +29,13 @@ const Viewport3D = ({ siteData, onBlockSelect, selectedBlock }) => {
 
                     {/* Render Stockpiles */}
                     <StockpileRenderer stockpiles={siteData.stockpiles} />
+
+                    {/* Render Simulation (Active Tasks) */}
+                    <HaulageRenderer
+                        activeTasks={siteData.activeTasks}
+                        activityAreas={siteData.activityAreas}
+                        stockpiles={siteData.stockpiles}
+                    />
 
                     <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />
                 </Suspense>
