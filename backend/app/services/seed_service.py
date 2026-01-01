@@ -1,86 +1,133 @@
 from sqlalchemy.orm import Session
-from ..domain import models_site, models_config, models_resources, models_flow, models_scheduling
+from ..domain import models_core, models_time, models_resource, models_flow
+import datetime
 import uuid
-from datetime import datetime
-def seed_test_data(db: Session):
-    # 1. Create Site
-    site = models_site.Site(name="Demo Mine Site", time_zone="UTC")
+
+def seed_enterprise_data(db: Session):
+    # 1. Site Configuration
+    site = models_core.Site(
+        name="Enterprise Coal Mine",
+        unit_system="Metric",
+        default_quality_basis_preferences={"CV": "ARB", "Ash": "ADB"}
+    )
     db.add(site)
-    db.flush()
+    db.flush() # get site_id
 
-    # 2. Config (Materials)
-    mat_coal = models_config.MaterialType(site_id=site.site_id, name="Thermal Coal", category="ROM", default_density=1.4)
-    mat_waste = models_config.MaterialType(site_id=site.site_id, name="Waste", category="Waste", default_density=2.2)
+    # 2. Materials & Qualities
+    # Materials
+    mat_coal = models_resource.MaterialType(site_id=site.site_id, name="Thermal Coal", category="ROM", reporting_group="Coal")
+    mat_waste = models_resource.MaterialType(site_id=site.site_id, name="Overburden", category="Waste", reporting_group="Waste")
     db.add_all([mat_coal, mat_waste])
+    
+    # Qualities
+    q_cv = models_resource.QualityField(
+        site_id=site.site_id, name="CV_ARB", units="MJ/kg", basis="ARB", 
+        aggregation_rule="WeightedAverage", constraint_direction_default="Min"
+    )
+    q_ash = models_resource.QualityField(
+        site_id=site.site_id, name="Ash_ADB", units="%", basis="ADB", 
+        aggregation_rule="WeightedAverage", constraint_direction_default="Max"
+    )
+    db.add_all([q_cv, q_ash])
     db.flush()
 
-    # 3. Resources
-    r_ex1 = models_resources.Resource(site_id=site.site_id, name="EX-01 (Liebherr 9800)", resource_type="Excavator", base_rate=3000, base_rate_units="t/h")
-    r_ex2 = models_resources.Resource(site_id=site.site_id, name="EX-02 (CAT 6060)", resource_type="Excavator", base_rate=2500, base_rate_units="t/h")
-    r_trk1 = models_resources.Resource(site_id=site.site_id, name="Fleet CAT 793 (x5)", resource_type="TruckFleet", base_rate=0, base_rate_units="t/h")
-    db.add_all([r_ex1, r_ex2, r_trk1])
+    # 3. Calendar & Periods
+    cal = models_time.Calendar(site_id=site.site_id, name="Production Calendar", period_granularity_type="Shift")
+    db.add(cal)
     db.flush()
 
-    # 4. Activities & Areas (The Block Model)
-    act_mine = models_resources.Activity(site_id=site.site_id, name="Mining", display_color="#3b82f6") # Blue
+    # Generate 14 Shifts (1 Week)
+    start_dt = datetime.datetime.now().replace(hour=6, minute=0, second=0, microsecond=0)
+    periods = []
+    for i in range(14):
+        is_day = i % 2 == 0
+        p_start = start_dt + datetime.timedelta(hours=12*i)
+        p_end = p_start + datetime.timedelta(hours=12)
+        p_name = f"Shift {i+1} ({'Day' if is_day else 'Night'})"
+        
+        period = models_time.Period(
+            calendar_id=cal.calendar_id,
+            name=p_name,
+            start_datetime=p_start, 
+            end_datetime=p_end,
+            duration_hours=12.0,
+            group_shift="Day" if is_day else "Night",
+            group_day=p_start.strftime("%Y-%m-%d")
+        )
+        periods.append(period)
+    db.add_all(periods)
+    db.flush()
+
+    # 4. Resources
+    # Excavator 1
+    ex1 = models_resource.Resource(
+        site_id=site.site_id, name="EX-200 (Hitachi 2500)", resource_type="Excavator",
+        capacity_type="Throughput", base_rate=1500, base_rate_units="t/h",
+        can_reduce_rate_for_blend=True
+    )
+    # Truck Fleet
+    trucks = models_resource.Resource(
+        site_id=site.site_id, name="CAT 789 Fleet", resource_type="TruckFleet",
+        capacity_type="Volume", base_rate=0, base_rate_units="variable"
+    )
+    db.add_all([ex1, trucks])
+    db.flush()
+
+    # 5. Network & Flow
+    net = models_flow.FlowNetwork(site_id=site.site_id, name="Main Pit Network")
+    db.add(net)
+    db.flush()
+
+    # Nodes
+    n_source = models_flow.FlowNode(network_id=net.network_id, node_type="Source", name="Active Pit")
+    n_dump = models_flow.FlowNode(network_id=net.network_id, node_type="Dump", name="Waste Dump 1", location_geometry={"position": [-50, 0, -50]})
+    n_rom = models_flow.FlowNode(network_id=net.network_id, node_type="Stockpile", name="ROM Pad A", location_geometry={"position": [150, 0, -50]})
+    n_plant = models_flow.FlowNode(network_id=net.network_id, node_type="WashPlant", name="CHPP Module 1")
+    
+    db.add_all([n_source, n_dump, n_rom, n_plant])
+    db.flush()
+
+    # Stockpile Config
+    sp_config = models_flow.StockpileConfig(
+        node_id=n_rom.node_id, 
+        inventory_method="WeightedAverage", 
+        max_capacity_tonnes=50000,
+        current_inventory_tonnes=12000,
+        current_grade_vector={"CV_ARB": 21.5, "Ash_ADB": 14.2}
+    )
+    db.add(sp_config)
+
+    # 6. Activities & Spatial Model (Block Model)
+    act_mine = models_resource.Activity(site_id=site.site_id, name="Mining", display_color="#3b82f6")
     db.add(act_mine)
     db.flush()
 
+    # Create 9 Blocks (3x3)
     areas = []
-    # Create a 5x5 grid of blocks
-    for x in range(5):
-        for y in range(5):
-            is_coal = (x + y) % 2 == 0
-            area = models_resources.ActivityArea(
+    for x in range(3):
+        for y in range(3):
+            is_coal = (x+y)%2 == 0
+            mat_id = mat_coal.material_type_id if is_coal else mat_waste.material_type_id
+            
+            # Slice State (JSON)
+            slice_state = [{
+                "index": 0,
+                "status": "Available",
+                "quantity": 10000,
+                "material_type_id": mat_id,
+                "qualities": {"CV_ARB": 24.0 if is_coal else 0, "Ash_ADB": 12.0 if is_coal else 80}
+            }]
+            
+            area = models_resource.ActivityArea(
                 site_id=site.site_id,
                 activity_id=act_mine.activity_id,
                 name=f"Block-{x}-{y}",
-                geometry={"position": [x*50, 0, y*50], "size": [45, 10, 45]},
-                priority=100 - (x+y),
-                slice_states=[{"index": 0, "status": "Available", "quantity": 5000, "material": "Coal" if is_coal else "Waste"}]
+                geometry={"position": [x*60, 0, y*60], "size": [50, 10, 50]},
+                slice_states=slice_state,
+                priority=10
             )
             areas.append(area)
     db.add_all(areas)
-
-    # 5. Flow Network (Simple)
-    net = models_flow.FlowNetwork(site_id=site.site_id, name="Main Haulage")
-    db.add(net)
-    db.flush()
-    
-    n_pit = models_flow.FlowNode(network_id=net.network_id, node_type="Source", name="Pit Exit")
-    n_rom = models_flow.FlowNode(network_id=net.network_id, node_type="Stockpile", name="ROM Pad")
-    n_dump = models_flow.FlowNode(network_id=net.network_id, node_type="Dump", name="Waste Dump")
-    db.add_all([n_pit, n_rom, n_dump])
-    db.flush()
-
-    # 6. Schedule (Draft)
-    sched = models_scheduling.ScheduleVersion(site_id=site.site_id, name="Q1 Base Schedule", status="Draft")
-    db.add(sched)
-    db.flush()
-
-    # 7. Calendar
-    from ..services import calendar_service
-    cal = calendar_service.generate_standard_roster(db, site.site_id, datetime.utcnow())
-    periods = cal.periods # List of period objects
-    
-    # Add Test Tasks
-    t1 = models_scheduling.Task(
-        schedule_version_id=sched.version_id,
-        resource_id=r_ex1.resource_id,
-        activity_id=act_mine.activity_id,
-        period_id=periods[0].period_id, # First Shift
-        activity_area_id=areas[0].area_id, 
-        planned_quantity=2000
-    )
-    t2 = models_scheduling.Task(
-        schedule_version_id=sched.version_id,
-        resource_id=r_ex1.resource_id,
-        activity_id=act_mine.activity_id,
-        period_id=periods[1].period_id, # Second Shift
-        activity_area_id=areas[1].area_id, 
-        planned_quantity=2000
-    )
-    db.add_all([t1, t2])
     
     db.commit()
     return site.site_id

@@ -6,15 +6,27 @@ const StockpileRenderer = ({ stockpiles = [] }) => {
 
     return (
         <group>
-            {stockpiles.map((pile, idx) => {
-                // Calculate Scale based on Tonnage
-                // Base size = 1, Max size = 5 (at 100k tons)
-                const tons = pile.current_tonnage || 0;
+            {stockpiles.map((node, idx) => {
+                // Enterprise Model: node.node_type = "Stockpile" | "Dump" | "WashPlant"
+                // Config is nested in node.stockpile_config or similar (if joined)
+                // But simplified for now: logic based on node_type
+
+                if (node.node_type !== 'Stockpile' && node.node_type !== 'Dump') return null;
+
+                const isStockpile = node.node_type === 'Stockpile';
+
+                // Safe Access to nested config (FastAPI might flatten or nest)
+                // Assuming standard Pydantic/ORM serialization where relationships are included if eager loaded
+                // If not, fallbacks to 0.
+                const config = node.stockpile_config || {};
+                const tons = config.current_inventory_tonnes || 0;
+
+                // Scale
                 const scale = 1 + (Math.min(tons, 100000) / 25000);
 
-                // Position: Hardcoded for now based on seed data layout
-                // ROM Pad usually near (100, 0, -50). Offset them if multiple.
-                const position = [120 + (idx * 50), 0, -50];
+                // Position: from node.location_geometry.position
+                const posData = node.location_geometry?.position || [120 + (idx * 50), 0, -50];
+                const position = [posData[0], posData[1], posData[2]];
 
                 return (
                     <group key={pile.node_id || idx} position={position}>

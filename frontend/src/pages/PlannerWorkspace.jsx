@@ -51,12 +51,12 @@ const PlannerWorkspace = () => {
                 const versions = schedRes.data;
                 const activeScheduleId = versions.length > 0 ? versions[0].version_id : null;
 
-                // 3b. Get Stockpiles
-                let stockpiles = [];
+                // 3b. Get Flow Network Nodes (Stockpiles, Plants, Dumps)
+                let flowNodes = [];
                 try {
-                    const stockRes = await axios.get(`http://localhost:8000/stockpiles?site_id=${siteId}`);
-                    stockpiles = stockRes.data;
-                } catch (e) { console.warn("Stockpiles fetch failed"); }
+                    const nodesRes = await axios.get(`http://localhost:8000/config/network-nodes?site_id=${siteId}`);
+                    flowNodes = nodesRes.data;
+                } catch (e) { console.warn("Network Nodes fetch failed"); }
 
                 // 4. Get Calendar & Periods
                 let sitePeriods = [];
@@ -81,7 +81,7 @@ const PlannerWorkspace = () => {
                 setSiteData({
                     siteId,
                     activityAreas: areas,
-                    stockpiles: stockpiles,
+                    flowNodes: flowNodes,
                     resources: resRes.data,
                     activeScheduleId,
                     periods: sitePeriods,
@@ -239,6 +239,7 @@ const PlannerWorkspace = () => {
                                 siteData={siteData}
                                 onBlockSelect={setSelectedBlock}
                                 selectedBlock={selectedBlock}
+                                flowNodes={siteData.flowNodes}
                             />
                         </div>
                     )}
