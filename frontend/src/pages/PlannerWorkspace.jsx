@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/ui/Sidebar';
 import Viewport3D from '../components/spatial/Viewport3D';
 import GanttChart from '../components/scheduler/GanttChart';
+import Dashboard from '../components/reporting/Dashboard';
 import axios from 'axios';
 
 const PlannerWorkspace = () => {
@@ -192,7 +193,11 @@ const PlannerWorkspace = () => {
                         />
                     )}
 
-                    {activeTab !== 'spatial' && activeTab !== 'gantt' && (
+                    {activeTab === 'reporting' && (
+                        <Dashboard scheduleVersionId={siteData.activeScheduleId} />
+                    )}
+
+                    {activeTab !== 'spatial' && activeTab !== 'gantt' && activeTab !== 'reporting' && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
                                 <h2 className="text-xl font-semibold mb-2">Module Under Construction</h2>

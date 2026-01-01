@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import config_router, schedule_router, calendar_router, optimization_router
+from .routers import config_router, schedule_router, calendar_router, optimization_router, reporting_router
 
 app = FastAPI(title="MineOpt Pro Enterprise API")
 
@@ -16,6 +16,7 @@ app.include_router(config_router.router)
 app.include_router(schedule_router.router)
 app.include_router(calendar_router.router)
 app.include_router(optimization_router.router)
+app.include_router(reporting_router.router)
 
 
 
