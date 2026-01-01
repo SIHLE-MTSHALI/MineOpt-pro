@@ -14,7 +14,8 @@ const PlannerWorkspace = () => {
         siteId: null,
         resources: [],
         activeScheduleId: null,
-        periods: []
+        periods: [],
+        versions: []
     });
 
     const [selectedBlock, setSelectedBlock] = useState(null);
@@ -37,18 +38,17 @@ const PlannerWorkspace = () => {
                 // 2. Get Resources for Site
                 const resRes = await axios.get(`http://localhost:8000/config/resources?site_id=${siteId}`);
 
-                // 2b. Get Activity Areas (Blocks) - Need new endpoint or use existing
-                // Assuming we add GET /config/activity-areas later, for now let's try to mock it 
-                // OR add the endpoint. Let's add the endpoint in the backend.
+                // 2b. Get Activity Areas (Blocks)
                 let areas = [];
                 try {
                     const areasRes = await axios.get(`http://localhost:8000/config/activity-areas?site_id=${siteId}`);
                     areas = areasRes.data;
                 } catch (e) { console.warn("Activity Areas endpoint missing"); }
 
-                // 3. Get Schedules for Site
+                // 3. Get Schedules for Site (Versions)
                 const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteId}/versions`);
-                const activeScheduleId = schedRes.data.length > 0 ? schedRes.data[0].version_id : null;
+                const versions = schedRes.data;
+                const activeScheduleId = versions.length > 0 ? versions[0].version_id : null;
 
                 // 4. Get Calendar & Periods
                 let sitePeriods = [];
@@ -59,7 +59,7 @@ const PlannerWorkspace = () => {
                     sitePeriods = perRes.data;
                 }
 
-                console.log("DEBUG: SiteData Loaded", { siteId, resources: resRes.data, activeScheduleId, periods: sitePeriods });
+                console.log("DEBUG: SiteData Loaded", { siteId, resources: resRes.data, activeScheduleId, periods: sitePeriods, versions });
 
                 setSiteData({
                     siteId,
@@ -67,7 +67,8 @@ const PlannerWorkspace = () => {
                     stockpiles: [],
                     resources: resRes.data,
                     activeScheduleId,
-                    periods: sitePeriods
+                    periods: sitePeriods,
+                    versions: versions
                 });
             } else {
                 console.warn("DEBUG: No sites found.");
@@ -112,6 +113,31 @@ const PlannerWorkspace = () => {
         }
     };
 
+    const handleCreateScenario = async () => {
+        const name = window.prompt("Enter Scenario Name (e.g. 'Excavator 3 Down'):");
+        if (!name) return;
+
+        setLoading(true);
+        try {
+            const res = await axios.post('http://localhost:8000/schedule/versions', {
+                site_id: siteData.siteId,
+                name: name
+            });
+            // Refresh Versions
+            const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteData.siteId}/versions`);
+            setSiteData(prev => ({
+                ...prev,
+                versions: schedRes.data,
+                activeScheduleId: res.data.version_id // Switch to new version
+            }));
+            setNotification({ type: 'success', message: `Scenario '${name}' Created!` });
+        } catch (e) {
+            setNotification({ type: 'error', message: 'Failed to create scenario.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden font-sans">
             <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -120,9 +146,24 @@ const PlannerWorkspace = () => {
                 {/* Top Bar */}
                 <header className="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-950/50">
                     <div className="flex items-center space-x-4">
-                        <span className="text-sm text-slate-400">Project:</span>
-                        <span className="font-medium text-white">MineOpt Demo</span>
-                        <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-500 border border-blue-500/30">ENTERPRISE</span>
+                        <span className="text-sm text-slate-400">Scenario:</span>
+
+                        <select
+                            value={siteData.activeScheduleId || ""}
+                            onChange={(e) => setSiteData(prev => ({ ...prev, activeScheduleId: e.target.value }))}
+                            className="bg-slate-800 border border-slate-700 text-white text-sm rounded px-3 py-1 focus:outline-none focus:border-blue-500"
+                        >
+                            {siteData.versions?.map(v => (
+                                <option key={v.version_id} value={v.version_id}>{v.name} ({v.status})</option>
+                            ))}
+                        </select>
+
+                        <button
+                            onClick={handleCreateScenario}
+                            className="p-1 px-2 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-slate-300 transition-colors"
+                        >
+                            + New
+                        </button>
                     </div>
                     <div className="flex items-center space-x-2">
                         {/* Seed Button for Verification */}
