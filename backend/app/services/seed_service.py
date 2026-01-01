@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from ..domain import models_core, models_time, models_resource, models_flow
+from ..domain import models_core, models_time, models_resource, models_flow, models_scheduling
 import datetime
 import uuid
 
@@ -131,4 +131,13 @@ def seed_enterprise_data(db: Session):
     db.add_all(areas)
     
     db.commit()
-    return site.site_id
+    # 7. Initial Schedule Version
+    sched_ver = models_scheduling.ScheduleVersion(
+        site_id=site.site_id,
+        name="Initial Demo Plan (Draft)",
+        status="Draft"
+    )
+    db.add(sched_ver)
+    db.commit()
+
+    return {"site_id": site.site_id, "version_id": sched_ver.version_id}
