@@ -50,6 +50,31 @@ def create_task(version_id: str, task: TaskCreate, db: Session = Depends(get_db)
     db.refresh(db_task)
     return db_task
 
+class TaskUpdate(BaseModel):
+    resource_id: Optional[str] = None
+    period_id: Optional[str] = None
+    activity_area_id: Optional[str] = None
+    planned_quantity: Optional[float] = None
+
+@router.put("/tasks/{task_id}")
+def update_task(task_id: str, updates: TaskUpdate, db: Session = Depends(get_db)):
+    task = db.query(models_scheduling.Task).filter(models_scheduling.Task.task_id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if updates.resource_id:
+        task.resource_id = updates.resource_id
+    if updates.period_id:
+        task.period_id = updates.period_id
+    if updates.activity_area_id:
+        task.activity_area_id = updates.activity_area_id
+    if updates.planned_quantity is not None:
+        task.planned_quantity = updates.planned_quantity
+        
+    db.commit()
+    db.refresh(task)
+    return task
+
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, db: Session = Depends(get_db)):
     task = db.query(models_scheduling.Task).filter(models_scheduling.Task.task_id == task_id).first()

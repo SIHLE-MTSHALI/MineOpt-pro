@@ -23,8 +23,9 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [] })
                 id: t.task_id,
                 resourceId: t.resource_id,
                 startPeriod: t.period_id,
-                label: "Mining Task",
-                color: 'bg-blue-600'
+                label: `${t.planned_quantity}t`, // Todo: Resolve Block Name via ID if available
+                color: 'bg-blue-600',
+                activityAreaId: t.activity_area_id
             }));
             setTasks(backendTasks);
         } catch (e) {
