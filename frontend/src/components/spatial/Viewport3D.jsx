@@ -4,7 +4,7 @@ import { OrbitControls, Grid, Environment, ContactShadows } from '@react-three/d
 import ActivityAreaRenderer from './ActivityAreaRenderer';
 import StockpileRenderer from './StockpileRenderer';
 
-const Viewport3D = ({ siteData }) => {
+const Viewport3D = ({ siteData, onBlockSelect, selectedBlock }) => {
     return (
         <div className="h-full w-full bg-slate-900">
             <Canvas camera={{ position: [500, 500, 500], fov: 45 }}>
@@ -19,7 +19,11 @@ const Viewport3D = ({ siteData }) => {
                     </group>
 
                     {/* Render Activity Areas (Mining Blocks) */}
-                    <ActivityAreaRenderer areas={siteData.activityAreas} />
+                    <ActivityAreaRenderer
+                        areas={siteData.activityAreas}
+                        onSelect={onBlockSelect}
+                        selectedBlock={selectedBlock}
+                    />
 
                     {/* Render Stockpiles */}
                     <StockpileRenderer stockpiles={siteData.stockpiles} />

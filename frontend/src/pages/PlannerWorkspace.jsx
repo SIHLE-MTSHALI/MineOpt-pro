@@ -12,9 +12,11 @@ const PlannerWorkspace = () => {
         activityAreas: [],
         siteId: null,
         resources: [],
-        activeScheduleId: null
+        activeScheduleId: null,
+        periods: []
     });
 
+    const [selectedBlock, setSelectedBlock] = useState(null);
     const [loading, setLoading] = useState(false);
     const [notification, setNotification] = useState(null);
 
@@ -34,6 +36,15 @@ const PlannerWorkspace = () => {
                 // 2. Get Resources for Site
                 const resRes = await axios.get(`http://localhost:8000/config/resources?site_id=${siteId}`);
 
+                // 2b. Get Activity Areas (Blocks) - Need new endpoint or use existing
+                // Assuming we add GET /config/activity-areas later, for now let's try to mock it 
+                // OR add the endpoint. Let's add the endpoint in the backend.
+                let areas = [];
+                try {
+                    const areasRes = await axios.get(`http://localhost:8000/config/activity-areas?site_id=${siteId}`);
+                    areas = areasRes.data;
+                } catch (e) { console.warn("Activity Areas endpoint missing"); }
+
                 // 3. Get Schedules for Site
                 const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteId}/versions`);
                 const activeScheduleId = schedRes.data.length > 0 ? schedRes.data[0].version_id : null;
@@ -51,7 +62,7 @@ const PlannerWorkspace = () => {
 
                 setSiteData({
                     siteId,
-                    activityAreas: [], // Mocked for now (WP3)
+                    activityAreas: areas,
                     stockpiles: [],
                     resources: resRes.data,
                     activeScheduleId,
@@ -74,6 +85,29 @@ const PlannerWorkspace = () => {
         } catch (e) {
             setNotification({ type: 'error', message: 'Failed to seed data.' });
             setLoading(false);
+        }
+    };
+
+    const handleAddTask = async () => {
+        if (!selectedBlock || !siteData.activeScheduleId || siteData.periods.length === 0) return;
+
+        try {
+            // Find a resource (Excavator)
+            const excavator = siteData.resources.find(r => r.resource_type === 'Excavator');
+            const defaultResId = excavator ? excavator.resource_id : siteData.resources[0]?.resource_id;
+
+            await axios.post(`http://localhost:8000/schedule/versions/${siteData.activeScheduleId}/tasks`, {
+                schedule_version_id: siteData.activeScheduleId,
+                resource_id: defaultResId,
+                activity_id: selectedBlock.activity_id, // Assuming block has activity_id
+                period_id: siteData.periods[0].period_id, // Default to first period
+                activity_area_id: selectedBlock.area_id,
+                planned_quantity: 1000 // Default quantity
+            });
+            setNotification({ type: 'success', message: 'Task Added to Schedule!' });
+        } catch (e) {
+            console.error("Add Task Failed", e);
+            setNotification({ type: 'error', message: 'Failed to add task.' });
         }
     };
 
@@ -116,7 +150,11 @@ const PlannerWorkspace = () => {
 
                     {activeTab === 'spatial' && (
                         <div className="h-full w-full">
-                            <Viewport3D siteData={siteData} />
+                            <Viewport3D
+                                siteData={siteData}
+                                onBlockSelect={setSelectedBlock}
+                                selectedBlock={selectedBlock}
+                            />
                         </div>
                     )}
 
@@ -147,12 +185,36 @@ const PlannerWorkspace = () => {
                     <div className="space-y-4">
                         <div className="p-3 bg-slate-900 rounded border border-slate-800">
                             <p className="text-xs text-slate-500 mb-1">Selected Object</p>
-                            <p className="text-sm font-medium">None</p>
+                            <p className="text-sm font-bold text-blue-400">
+                                {selectedBlock ? (selectedBlock.name || selectedBlock.id) : "None"}
+                            </p>
+                            {selectedBlock && (
+                                <div className="mt-2 space-y-1 text-xs text-slate-400">
+                                    <div>ID: {(selectedBlock.area_id || selectedBlock.id).toString().substring(0, 8)}...</div>
+                                    <div>Material: {selectedBlock.slice_states?.[0]?.material || "Unknown"}</div>
+                                    <div>Quantity: {selectedBlock.slice_states?.[0]?.quantity || 0}t</div>
+                                </div>
+                            )}
                         </div>
+
+                        {selectedBlock && selectedBlock.area_id && (
+                            <button
+                                onClick={handleAddTask}
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium text-sm transition-colors"
+                            >
+                                + Add to Schedule
+                            </button>
+                        )}
+
+                        {selectedBlock && !selectedBlock.area_id && (
+                            <div className="text-xs text-amber-500 p-2 bg-amber-500/10 border border-amber-500/20 rounded">
+                                This is a preview block. Initialize Demo Data to create real scheduleable blocks.
+                            </div>
+                        )}
+
                         <div className="p-3 bg-slate-900 rounded border border-slate-800">
                             <p className="text-xs text-slate-500 mb-1">Total Blocks</p>
-                            <p className="text-sm font-medium">0 (Database Empty)</p>
-                            <p className="text-xs text-slate-500 mt-2">Click "Initialize Demo Data" above to load.</p>
+                            <p className="text-sm font-medium">{siteData.activityAreas.length} (Loaded)</p>
                         </div>
                     </div>
                 </aside>

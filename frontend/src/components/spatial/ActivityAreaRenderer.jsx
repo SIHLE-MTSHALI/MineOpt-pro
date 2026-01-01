@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
-const ActivityAreaRenderer = ({ areas = [] }) => {
+const ActivityAreaRenderer = ({ areas = [], onSelect, selectedBlock }) => {
     // Mock Data if empty
     const dummyAreas = useMemo(() => {
         if (areas.length > 0) return areas;
@@ -22,20 +22,40 @@ const ActivityAreaRenderer = ({ areas = [] }) => {
 
     return (
         <group>
-            {dummyAreas.map((area) => (
-                <mesh key={area.id} position={area.position} castShadow receiveShadow onClick={(e) => {
-                    e.stopPropagation();
-                    console.log('Clicked Area:', area.id);
-                }}>
-                    <boxGeometry args={[48, area.height, 48]} />
-                    <meshStandardMaterial color={area.color} roughness={0.7} metalness={0.1} />
-                    {/* Wireframe overlay for technical look */}
-                    <lineSegments>
-                        <edgesGeometry args={[new THREE.BoxGeometry(48, area.height, 48)]} />
-                        <lineBasicMaterial color="black" linewidth={1} opacity={0.2} transparent />
-                    </lineSegments>
-                </mesh>
-            ))}
+            {dummyAreas.map((area) => {
+                const isSelected = selectedBlock && (
+                    (area.area_id && area.area_id === selectedBlock.area_id) ||
+                    (area.id && area.id === selectedBlock.id)
+                );
+
+                return (
+                    <mesh
+                        key={area.id || area.area_id}
+                        position={area.position || area.geometry?.position}
+                        castShadow
+                        receiveShadow
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('Clicked Area:', area);
+                            if (onSelect) onSelect(area);
+                        }}
+                    >
+                        <boxGeometry args={[48, area.height || 10, 48]} />
+                        <meshStandardMaterial
+                            color={isSelected ? "#fbbf24" : (area.color || (area.slice_states?.[0]?.material === 'Coal' ? '#3b82f6' : '#ef4444'))}
+                            roughness={0.7}
+                            metalness={0.1}
+                            emissive={isSelected ? "#fbbf24" : "black"}
+                            emissiveIntensity={isSelected ? 0.5 : 0}
+                        />
+                        {/* Wireframe overlay for technical look */}
+                        <lineSegments>
+                            <edgesGeometry args={[new THREE.BoxGeometry(48, area.height || 10, 48)]} />
+                            <lineBasicMaterial color={isSelected ? "white" : "black"} linewidth={2} opacity={0.2} transparent />
+                        </lineSegments>
+                    </mesh>
+                );
+            })}
         </group>
     );
 };

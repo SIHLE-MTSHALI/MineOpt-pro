@@ -36,3 +36,10 @@ def get_resources(site_id: str = None, db: Session = Depends(get_db)):
     if site_id:
         query = query.filter(models_resources.Resource.site_id == site_id)
     return query.all()
+
+@router.get("/activity-areas")
+def get_activity_areas(site_id: str = None, db: Session = Depends(get_db)):
+    query = db.query(models_resources.ActivityArea)
+    if site_id:
+        query = query.filter(models_resources.ActivityArea.site_id == site_id)
+    return query.all()
