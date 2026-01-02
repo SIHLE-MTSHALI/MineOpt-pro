@@ -7,6 +7,24 @@ BASE_URL = "http://localhost:8000"
 def run_verification():
     print("=== MineOpt Pro Enterprise Verification ===")
     
+    # 0. Login
+    print("\n[0] Authenticating...")
+    token = ""
+    try:
+        # Try default admin
+        res = requests.post(f"{BASE_URL}/auth/token", data={"username": "admin", "password": "admin"})
+        if res.status_code == 200:
+            token = res.json()["access_token"]
+            print(f"    Success: Got Token {token[:10]}...")
+        else:
+            print(f"    Login Failed: {res.status_code}")
+    except:
+        print("    Server might be down or Auth incorrect.")
+
+    headers = {}
+    # Note: Currently open APIs don't require Auth *except* /users/me or future secured ones. 
+    # But good practice to send it if we enabled global dependencies (which we haven't strictly done for all routers yet).
+    
     # 1. Initialize Site (Seed Data)
     print("\n[1] Seeding Demo Data...")
     try:

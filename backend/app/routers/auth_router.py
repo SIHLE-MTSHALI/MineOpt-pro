@@ -9,6 +9,13 @@ import uuid
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
+from pydantic import BaseModel
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: str = None
+
 @router.post("/register")
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     # Check existing
