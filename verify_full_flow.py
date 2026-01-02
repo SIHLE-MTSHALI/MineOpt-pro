@@ -20,6 +20,10 @@ def run_verification():
         print(f"    Schedule Version ID: {version_id}")
     except Exception as e:
         print(f"    FAILED: {e}")
+        try:
+             print(f"    Response text: {res.text}")
+        except:
+             pass
         return
 
     # 2. Verify Flow Network
