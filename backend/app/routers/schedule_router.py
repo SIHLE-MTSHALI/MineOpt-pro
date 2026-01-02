@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db, engine
-from ..domain import models_scheduling, models_resource, models_time
+from ..domain import models_scheduling, models_resource, models_calendar
 # from ..schemas import schedule_schemas
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
-# Create Tables
-models_scheduling.Base.metadata.create_all(bind=engine)
+# Note: Database tables are now created in main.py lifespan
+
 
 router = APIRouter(prefix="/schedule", tags=["Scheduling"])
 

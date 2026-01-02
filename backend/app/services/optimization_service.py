@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from ..domain import models_scheduling, models_resource, models_time
+from ..domain import models_scheduling, models_resource, models_calendar
 from datetime import datetime
 
 class OptimizationService:
@@ -14,13 +14,13 @@ class OptimizationService:
             return {"status": "error", "message": "No excavators found"}
 
         # 2. Fetch All Periods
-        calendar = db.query(models_time.Calendar).filter(models_time.Calendar.site_id == site_id).first()
+        calendar = db.query(models_calendar.Calendar).filter(models_calendar.Calendar.site_id == site_id).first()
         if not calendar:
             return {"status": "error", "message": "No calendar found"}
             
-        periods = db.query(models_time.Period)\
-            .filter(models_time.Period.calendar_id == calendar.calendar_id)\
-            .order_by(models_time.Period.start_datetime)\
+        periods = db.query(models_calendar.Period)\
+            .filter(models_calendar.Period.calendar_id == calendar.calendar_id)\
+            .order_by(models_calendar.Period.start_datetime)\
             .all()
 
         # 3. Fetch All Activity Areas & Build Topology

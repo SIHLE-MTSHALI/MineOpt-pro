@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from ..domain import models_core, models_time, models_resource, models_flow, models_scheduling
+from ..domain import models_core, models_calendar, models_resource, models_flow, models_scheduling
 import datetime
 import uuid
 
@@ -32,7 +32,7 @@ def seed_enterprise_data(db: Session):
     db.flush()
 
     # 3. Calendar & Periods
-    cal = models_time.Calendar(site_id=site.site_id, name="Production Calendar", period_granularity_type="Shift")
+    cal = models_calendar.Calendar(site_id=site.site_id, name="Production Calendar", period_granularity_type="Shift")
     db.add(cal)
     db.flush()
 
@@ -45,7 +45,7 @@ def seed_enterprise_data(db: Session):
         p_end = p_start + datetime.timedelta(hours=12)
         p_name = f"Shift {i+1} ({'Day' if is_day else 'Night'})"
         
-        period = models_time.Period(
+        period = models_calendar.Period(
             calendar_id=cal.calendar_id,
             name=p_name,
             start_datetime=p_start, 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..domain import models_scheduling, models_resource, models_time
+from ..domain import models_scheduling, models_resource, models_calendar
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -27,7 +27,7 @@ def get_dashboard_stats(schedule_version_id: str, db: Session = Depends(get_db))
     
     # Helper to get Periods
     period_ids = [t.period_id for t in tasks if t.period_id]
-    periods = db.query(models_time.Period).filter(models_time.Period.period_id.in_(period_ids)).all()
+    periods = db.query(models_calendar.Period).filter(models_calendar.Period.period_id.in_(period_ids)).all()
     period_map = {p.period_id: p for p in periods}
     
     production_by_period: Dict[str, Dict[str, float]] = {}

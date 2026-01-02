@@ -1,16 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db, engine, Base
-from ..domain import models_core, models_time, models_resource, models_flow, models_scheduling
+from ..domain import models_core, models_calendar, models_resource, models_flow, models_scheduling
 # from ..schemas import site_schemas
 from ..services import seed_service
 
-# Create Tables (Enterprise Schema)
-models_core.Base.metadata.create_all(bind=engine)
-models_time.Base.metadata.create_all(bind=engine)
-models_resource.Base.metadata.create_all(bind=engine)
-models_flow.Base.metadata.create_all(bind=engine)
-models_scheduling.Base.metadata.create_all(bind=engine)
+# Note: Database tables are now created in main.py lifespan
+
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
