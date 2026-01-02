@@ -132,25 +132,39 @@ const PlannerWorkspace = () => {
     };
 
     const handleCreateScenario = async () => {
-        const name = window.prompt("Enter Scenario Name (e.g. 'Excavator 3 Down'):");
+        const name = window.prompt("Enter name for NEW Scenario (Fork):");
         if (!name) return;
 
         setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8000/schedule/versions', {
-                site_id: siteData.siteId,
-                name: name
-            });
+            // Call Fork Endpoint
+            // We fork the CURRENT active schedule
+            if (!siteData.activeScheduleId) {
+                alert("No base schedule to fork. Please seed data first.");
+                setLoading(false);
+                return;
+            }
+
+            const res = await axios.post(`http://localhost:8000/schedule/versions/${siteData.activeScheduleId}/fork?new_name=${encodeURIComponent(name)}`);
+
             // Refresh Versions
             const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteData.siteId}/versions`);
+
             setSiteData(prev => ({
                 ...prev,
                 versions: schedRes.data,
-                activeScheduleId: res.data.version_id // Switch to new version
+                // Switch to new fork
+                activeScheduleId: res.data.version_id
             }));
+
             setNotification({ type: 'success', message: `Scenario '${name}' Created!` });
+            // Reload to fetch the tasks for this new version
+            // For MVP reload is easiest to ensure state consistency
+            setTimeout(() => window.location.reload(), 1000);
+
         } catch (e) {
-            setNotification({ type: 'error', message: 'Failed to create scenario.' });
+            console.error(e);
+            setNotification({ type: 'error', message: 'Failed to fork scenario.' });
         } finally {
             setLoading(false);
         }
@@ -180,7 +194,7 @@ const PlannerWorkspace = () => {
                             onClick={handleCreateScenario}
                             className="p-1 px-2 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-slate-300 transition-colors"
                         >
-                            + New
+                            Fork / Copy
                         </button>
                     </div>
                     <div className="flex items-center space-x-2">

@@ -34,6 +34,44 @@ def create_version(version: ScheduleVersionCreate, db: Session = Depends(get_db)
     db.refresh(db_version)
     return db_version
 
+@router.post("/versions/{version_id}/fork")
+def fork_version(version_id: str, new_name: str = None, db: Session = Depends(get_db)):
+    # 1. Get Source
+    source = db.query(models_scheduling.ScheduleVersion).filter(models_scheduling.ScheduleVersion.version_id == version_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source version not found")
+        
+    # 2. Create Target
+    name = new_name or f"Copy of {source.name}"
+    target = models_scheduling.ScheduleVersion(
+        site_id=source.site_id,
+        name=name,
+        status="Draft"
+    )
+    db.add(target)
+    db.commit() # get ID
+    db.refresh(target)
+    
+    # 3. Copy Tasks
+    source_tasks = db.query(models_scheduling.Task).filter(models_scheduling.Task.schedule_version_id == version_id).all()
+    new_tasks = []
+    
+    for t in source_tasks:
+        nt = models_scheduling.Task(
+            schedule_version_id=target.version_id,
+            resource_id=t.resource_id,
+            activity_id=t.activity_id,
+            period_id=t.period_id,
+            activity_area_id=t.activity_area_id,
+            planned_quantity=t.planned_quantity
+        )
+        new_tasks.append(nt)
+        
+    db.add_all(new_tasks)
+    db.commit()
+    
+    return target
+
 @router.get("/site/{site_id}/versions")
 def get_versions_by_site(site_id: str, db: Session = Depends(get_db)):
     return db.query(models_scheduling.ScheduleVersion).filter(models_scheduling.ScheduleVersion.site_id == site_id).all()
