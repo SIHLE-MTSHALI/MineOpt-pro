@@ -15,7 +15,8 @@ from .routers import (
     reporting_router, 
     optimization_router, 
     integration_router, 
-    auth_router
+    auth_router,
+    quality_router
 )
 from .database import engine, Base
 
@@ -68,7 +69,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include all routers
 app.include_router(config_router.router)
 app.include_router(calendar_router.router)
 app.include_router(schedule_router.router)
@@ -77,6 +77,7 @@ app.include_router(stockpile_router.router)
 app.include_router(reporting_router.router)
 app.include_router(integration_router.router)
 app.include_router(auth_router.router)
+app.include_router(quality_router.router)
 
 
 @app.get("/")
