@@ -7,6 +7,8 @@ import FlowEditor from '../components/flow/FlowEditor';
 import QualitySpecs from '../components/quality/QualitySpecs';
 import StockpileManager from '../components/stockpile/StockpileManager';
 import WashPlantConfig from '../components/washplant/WashPlantConfig';
+import GeologyViewer from '../components/geology/GeologyViewer';
+import SettingsPanel from '../components/settings/SettingsPanel';
 import axios from 'axios';
 
 
@@ -295,7 +297,15 @@ const PlannerWorkspace = () => {
                         <WashPlantConfig siteId={siteData.siteId} />
                     )}
 
-                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs', 'data', 'resources'].includes(activeTab) && (
+                    {activeTab === 'geology' && (
+                        <GeologyViewer siteId={siteData.siteId} />
+                    )}
+
+                    {activeTab === 'settings' && (
+                        <SettingsPanel siteId={siteData.siteId} />
+                    )}
+
+                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs', 'data', 'resources', 'geology', 'settings'].includes(activeTab) && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
                                 <h2 className="text-xl font-semibold mb-2">Module Under Construction</h2>
