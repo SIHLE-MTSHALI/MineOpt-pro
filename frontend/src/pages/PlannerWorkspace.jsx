@@ -3,7 +3,10 @@ import Sidebar from '../components/ui/Sidebar';
 import Viewport3D from '../components/spatial/Viewport3D';
 import GanttChart from '../components/scheduler/GanttChart';
 import Dashboard from '../components/reporting/Dashboard';
+import FlowEditor from '../components/flow/FlowEditor';
+import QualitySpecs from '../components/quality/QualitySpecs';
 import axios from 'axios';
+
 
 const PlannerWorkspace = () => {
     const [activeTab, setActiveTab] = useState('spatial');
@@ -271,7 +274,18 @@ const PlannerWorkspace = () => {
                         <Dashboard scheduleVersionId={siteData.activeScheduleId} />
                     )}
 
-                    {activeTab !== 'spatial' && activeTab !== 'gantt' && activeTab !== 'reporting' && (
+                    {activeTab === 'flow-editor' && (
+                        <FlowEditor
+                            networkId={siteData.siteId}
+                            onSave={(data) => console.log('Saving flow network:', data)}
+                        />
+                    )}
+
+                    {activeTab === 'product-specs' && (
+                        <QualitySpecs siteId={siteData.siteId} />
+                    )}
+
+                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs'].includes(activeTab) && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
                                 <h2 className="text-xl font-semibold mb-2">Module Under Construction</h2>
