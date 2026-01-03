@@ -1,5 +1,8 @@
 import React from 'react';
-import { Box, Layers, Calendar, Truck, Settings, Database } from 'lucide-react';
+import {
+    Box, Layers, Calendar, Truck, Settings, Database,
+    GitBranch, Package, Zap, BarChart2
+} from 'lucide-react';
 import { clsx } from 'clsx';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
@@ -23,12 +26,18 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                 <p className="text-xs text-slate-500 mt-1">Enterprise Scheduling</p>
             </div>
 
-            <nav className="flex-1 py-4 space-y-1">
+            <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
+                {/* Planning Section */}
                 <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Planning</div>
                 <SidebarItem icon={Box} label="3D Spatial View" active={activeTab === 'spatial'} onClick={() => setActiveTab('spatial')} />
                 <SidebarItem icon={Calendar} label="Gantt Schedule" active={activeTab === 'gantt'} onClick={() => setActiveTab('gantt')} />
+                <SidebarItem icon={Zap} label="Schedule Control" active={activeTab === 'schedule-control'} onClick={() => setActiveTab('schedule-control')} />
+                <SidebarItem icon={BarChart2} label="Reports" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
 
+                {/* Configuration Section */}
                 <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-6 mb-2">Configuration</div>
+                <SidebarItem icon={GitBranch} label="Flow Network" active={activeTab === 'flow-editor'} onClick={() => setActiveTab('flow-editor')} />
+                <SidebarItem icon={Package} label="Product Specs" active={activeTab === 'product-specs'} onClick={() => setActiveTab('product-specs')} />
                 <SidebarItem icon={Database} label="Data Model" active={activeTab === 'data'} onClick={() => setActiveTab('data')} />
                 <SidebarItem icon={Truck} label="Resources" active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} />
                 <SidebarItem icon={Layers} label="Geology" active={activeTab === 'geology'} onClick={() => setActiveTab('geology')} />
@@ -49,3 +58,4 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 };
 
 export default Sidebar;
+
