@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { stockpileAPI } from '../../services/api';
 import {
     Box, Plus, Trash2, RefreshCw, TrendingUp, TrendingDown,
     AlertTriangle, CheckCircle, Package, Layers, ArrowDown, ArrowUp,
@@ -94,12 +94,12 @@ const StockpileCard = ({ stockpile, onReclaim, onDump, onViewHistory }) => {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${stockpile.type === 'ROM' ? 'bg-amber-500/20' :
-                                stockpile.type === 'Product' ? 'bg-green-500/20' :
-                                    'bg-blue-500/20'
+                            stockpile.type === 'Product' ? 'bg-green-500/20' :
+                                'bg-blue-500/20'
                             }`}>
                             <Layers size={20} className={`${stockpile.type === 'ROM' ? 'text-amber-400' :
-                                    stockpile.type === 'Product' ? 'text-green-400' :
-                                        'text-blue-400'
+                                stockpile.type === 'Product' ? 'text-green-400' :
+                                    'text-blue-400'
                                 }`} />
                         </div>
                         <div>
@@ -137,8 +137,8 @@ const StockpileCard = ({ stockpile, onReclaim, onDump, onViewHistory }) => {
                     <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
                         <div
                             className={`h-full rounded-full transition-all duration-500 ${isHigh ? 'bg-gradient-to-r from-amber-500 to-red-500' :
-                                    isLow ? 'bg-gradient-to-r from-blue-500 to-blue-400' :
-                                        'bg-gradient-to-r from-green-500 to-emerald-400'
+                                isLow ? 'bg-gradient-to-r from-blue-500 to-blue-400' :
+                                    'bg-gradient-to-r from-green-500 to-emerald-400'
                                 }`}
                             style={{ width: `${Math.min(percentage, 100)}%` }}
                         />
@@ -316,8 +316,8 @@ const StockpileManager = ({ siteId }) => {
     const fetchStockpiles = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`http://localhost:8000/stockpiles/site/${siteId}`);
-            setStockpiles(res.data);
+            const data = await stockpileAPI.getStockpiles(siteId);
+            setStockpiles(data);
         } catch (e) {
             // Use sample data if API not available
             setStockpiles([
@@ -371,7 +371,7 @@ const StockpileManager = ({ siteId }) => {
 
     const handleDumpSubmit = async (data) => {
         try {
-            await axios.post(`http://localhost:8000/stockpiles/${data.stockpile_id}/dump`, data);
+            await stockpileAPI.dumpMaterial(data.stockpile_id, data);
             fetchStockpiles();
         } catch (e) {
             // Optimistic update for demo
@@ -389,9 +389,7 @@ const StockpileManager = ({ siteId }) => {
         if (!quantity) return;
 
         try {
-            await axios.post(`http://localhost:8000/stockpiles/${stockpileId}/reclaim`, {
-                quantity: parseFloat(quantity)
-            });
+            await stockpileAPI.reclaimMaterial(stockpileId, parseFloat(quantity));
             fetchStockpiles();
         } catch (e) {
             // Optimistic update for demo

@@ -70,6 +70,35 @@ const LoginPage = ({ onLogin }) => {
         }
     };
 
+    const handleDemoLogin = async () => {
+        setLoading(true);
+        setError('');
+
+        try {
+            const formData = new URLSearchParams();
+            formData.append('username', 'admin');
+            formData.append('password', 'admin');
+
+            const response = await fetch('http://localhost:8000/auth/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Demo login failed - please ensure backend is running');
+            }
+
+            const data = await response.json();
+            localStorage.setItem('token', data.access_token);
+            onLogin(data.access_token);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">
             {/* Background Effects */}
@@ -160,8 +189,21 @@ const LoginPage = ({ onLogin }) => {
                         </button>
                     </div>
 
-                    <div className="mt-8 text-center text-xs text-slate-600">
-                        v2.0.0-E
+                    {/* Demo Mode */}
+                    <div className="mt-6 pt-6 border-t border-slate-800">
+                        <p className="text-xs text-slate-500 text-center mb-3">Quick access for testing</p>
+                        <button
+                            type="button"
+                            onClick={handleDemoLogin}
+                            disabled={loading}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2.5 rounded-lg border border-slate-700 transition-all disabled:opacity-50"
+                        >
+                            🚀 Enter Demo Mode (admin/admin)
+                        </button>
+                    </div>
+
+                    <div className="mt-6 text-center text-xs text-slate-600">
+                        v2.1.0-E
                     </div>
                 </div>
             </div>

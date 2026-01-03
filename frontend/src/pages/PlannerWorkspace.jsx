@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/ui/Sidebar';
 import Viewport3D from '../components/spatial/Viewport3D';
 import GanttChart from '../components/scheduler/GanttChart';
+import ScheduleControl from '../components/scheduler/ScheduleControl';
 import Dashboard from '../components/reporting/Dashboard';
 import FlowEditor from '../components/flow/FlowEditor';
 import QualitySpecs from '../components/quality/QualitySpecs';
@@ -271,6 +272,13 @@ const PlannerWorkspace = () => {
                             resources={siteData.resources}
                             scheduleVersionId={siteData.activeScheduleId}
                             periods={siteData.periods}
+                        />
+                    )}
+
+                    {activeTab === 'schedule-control' && (
+                        <ScheduleControl
+                            siteId={siteData.siteId}
+                            scheduleVersionId={siteData.activeScheduleId}
                         />
                     )}
 
