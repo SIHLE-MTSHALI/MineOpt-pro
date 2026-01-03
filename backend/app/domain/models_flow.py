@@ -102,7 +102,7 @@ class FlowNode(Base):
     # Relationships
     network = relationship("FlowNetwork", back_populates="nodes")
     stockpile_config = relationship("StockpileConfig", uselist=False, back_populates="node", cascade="all, delete-orphan")
-    wash_plant_config = relationship("WashPlantConfig", uselist=False, back_populates="node", cascade="all, delete-orphan")
+    wash_plant_config = relationship("WashPlantConfig", uselist=False, back_populates="node", cascade="all, delete-orphan", foreign_keys="[WashPlantConfig.node_id]")
     # Note: staged_stockpile_config relationship is defined in models_staged_stockpile.py
     # Access via StagedStockpileConfig.query.filter_by(node_id=...) if needed
     operating_resource = relationship("Resource")
@@ -387,7 +387,7 @@ class WashPlantConfig(Base):
     updated_at = Column(DateTime, nullable=True)
     
     # Relationships
-    node = relationship("FlowNode", back_populates="wash_plant_config")
+    node = relationship("FlowNode", back_populates="wash_plant_config", foreign_keys=[node_id])
     wash_table = relationship("WashTable", foreign_keys=[wash_table_id])
 
     def __repr__(self):

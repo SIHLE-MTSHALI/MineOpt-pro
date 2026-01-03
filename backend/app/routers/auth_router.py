@@ -23,9 +23,14 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username already registered")
         
+    # Handle empty strings for email to allow multiple users without emails (if DB unique constraint allows NULLs)
+    email_value = user.email
+    if not email_value or not email_value.strip():
+        email_value = None
+
     new_user = models_core.User(
         username=user.username,
-        email=user.email,
+        email=email_value,
         password_hash=AuthService.get_password_hash(user.password)
     )
     db.add(new_user)
