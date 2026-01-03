@@ -51,7 +51,7 @@ class StagedStockpileConfig(Base):
     updated_at = Column(DateTime, nullable=True)
     
     # Relationships
-    node = relationship("FlowNode", back_populates="staged_stockpile_config")
+    node = relationship("FlowNode")  # No back_populates to avoid cross-file issues
     build_specs = relationship("BuildSpec", back_populates="staged_config", order_by="BuildSpec.sequence")
     pile_states = relationship("StagedPileState", back_populates="staged_config")
 
