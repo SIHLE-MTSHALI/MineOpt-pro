@@ -18,7 +18,8 @@ from .routers import (
     auth_router,
     quality_router,
     staged_stockpile_router,
-    wash_table_router
+    wash_table_router,
+    security_router
 )
 from .database import engine, Base
 
@@ -82,6 +83,7 @@ app.include_router(auth_router.router)
 app.include_router(quality_router.router)
 app.include_router(staged_stockpile_router.router)
 app.include_router(wash_table_router.router)
+app.include_router(security_router.router)
 
 
 @app.get("/")
