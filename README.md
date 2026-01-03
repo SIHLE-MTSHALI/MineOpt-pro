@@ -42,6 +42,16 @@ MineOpt Pro is a comprehensive production scheduling system designed for open-ca
 | **8-Stage Pipeline** | Validation → Candidates → Resources → Flow → Quality → Constraints → Finalize → Persist |
 | **Variable Production Control** | Per-period rate factors and manual overrides |
 
+### 🧮 Constraint Programming Solver
+
+| Feature | Description |
+|---------|-------------|
+| **13 Constraint Types** | Equality, range, all-different, sum, precedence, and more |
+| **Domain Propagation** | Arc consistency for efficient solving |
+| **Branch & Bound** | Optimal or near-optimal solutions |
+| **Mining-Specific Builder** | Task scheduling, resource capacity, flow optimization |
+| **Hard/Soft Constraints** | Required vs penalized violations |
+
 ### ⚗️ Quality Management
 
 - **Blending optimization** across multiple sources
