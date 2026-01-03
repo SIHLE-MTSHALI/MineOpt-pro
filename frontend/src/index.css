@@ -1,7 +1,21 @@
+/*
+ * MineOpt Pro - Main Stylesheet Entry Point
+ */
+
+/* Tailwind CSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* 
+ * Note: design-system.css is imported via main.jsx to avoid 
+ * PostCSS/Tailwind @import ordering issues
+ */
+
+/* Additional app-level overrides */
 html, body, #root {
   height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
