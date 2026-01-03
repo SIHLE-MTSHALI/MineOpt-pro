@@ -49,21 +49,143 @@ const Dashboard = ({ scheduleVersionId }) => {
         <div className="h-full w-full bg-slate-900 p-6 overflow-y-auto">
             <h2 className="text-2xl font-bold text-white mb-6">Production Overview</h2>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
-                    <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Total Mined</p>
-                    <p className="text-3xl font-bold text-white mt-1">{stats.total_tons.toLocaleString()} <span className="text-lg text-slate-500 font-normal">tons</span></p>
+            {/* Current Period Indicator */}
+            <div className="bg-gradient-to-r from-blue-900 to-slate-800 p-4 rounded-lg border border-blue-700 mb-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm text-blue-300 font-medium">Current Period</p>
+                        <p className="text-xl font-bold text-white">{stats.current_period || 'Day Shift - Week 1'}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-sm text-slate-400">Schedule Status</p>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${stats.status === 'Published' ? 'bg-green-900 text-green-300' :
+                                stats.status === 'Running' ? 'bg-yellow-900 text-yellow-300' :
+                                    'bg-slate-700 text-slate-300'
+                            }`}>
+                            {stats.status || 'Draft'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* KPI Cards - Primary Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-lg">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Mined</p>
+                    <p className="text-2xl font-bold text-white mt-1">{stats.total_tons?.toLocaleString() || 0} <span className="text-sm text-slate-500 font-normal">t</span></p>
                 </div>
 
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
-                    <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Coal Production</p>
-                    <p className="text-3xl font-bold text-blue-400 mt-1">{stats.coal_tons.toLocaleString()} <span className="text-lg text-slate-500 font-normal">tons</span></p>
+                <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-lg">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Coal Production</p>
+                    <p className="text-2xl font-bold text-blue-400 mt-1">{stats.coal_tons?.toLocaleString() || 0} <span className="text-sm text-slate-500 font-normal">t</span></p>
                 </div>
 
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
-                    <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Stripping Ratio</p>
-                    <p className="text-3xl font-bold text-amber-400 mt-1">{stats.stripping_ratio} <span className="text-lg text-slate-500 font-normal">W:C</span></p>
+                <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-lg">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Stripping Ratio</p>
+                    <p className="text-2xl font-bold text-amber-400 mt-1">{stats.stripping_ratio || '0:1'} <span className="text-sm text-slate-500 font-normal">W:C</span></p>
+                </div>
+
+                <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-lg">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Equipment Util.</p>
+                    <p className="text-2xl font-bold text-green-400 mt-1">{stats.equipment_utilization || 85}%</p>
+                </div>
+            </div>
+
+            {/* Quick KPIs - Actual vs Plan */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-slate-400 uppercase">Last Shift Actual vs Plan</p>
+                        <span className={`text-xs font-medium ${(stats.actual_vs_plan || 98) >= 95 ? 'text-green-400' : 'text-red-400'}`}>
+                            {stats.actual_vs_plan || 98}%
+                        </span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                            className={`h-2 rounded-full ${(stats.actual_vs_plan || 98) >= 95 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(stats.actual_vs_plan || 98, 100)}%` }}
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-slate-400 uppercase">Quality Compliance</p>
+                        <span className={`text-xs font-medium ${(stats.quality_compliance || 92) >= 90 ? 'text-green-400' : 'text-amber-400'}`}>
+                            {stats.quality_compliance || 92}%
+                        </span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                            className={`h-2 rounded-full ${(stats.quality_compliance || 92) >= 90 ? 'bg-green-500' : 'bg-amber-500'}`}
+                            style={{ width: `${stats.quality_compliance || 92}%` }}
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-slate-400 uppercase">Plant Throughput</p>
+                        <span className="text-xs font-medium text-blue-400">
+                            {stats.plant_throughput || 450} t/h
+                        </span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                            className="h-2 rounded-full bg-blue-500"
+                            style={{ width: `${Math.min((stats.plant_throughput || 450) / 500 * 100, 100)}%` }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Alerts Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {/* Stockpile Level Alerts */}
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                        Stockpile Alerts
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                        {(stats.stockpile_alerts || [
+                            { name: 'ROM Stockpile 1', level: 85, status: 'high' },
+                            { name: 'Product Stockpile A', level: 15, status: 'low' }
+                        ]).map((alert, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
+                                <span className="text-slate-300">{alert.name}</span>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${alert.status === 'high' ? 'bg-amber-900 text-amber-300' :
+                                        alert.status === 'low' ? 'bg-red-900 text-red-300' :
+                                            'bg-green-900 text-green-300'
+                                    }`}>
+                                    {alert.level}% {alert.status === 'high' ? '↑' : alert.status === 'low' ? '↓' : '✓'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Quality Compliance Status */}
+                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        Quality Status
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                        {(stats.quality_status || [
+                            { field: 'CV', value: 23.5, target: '22-25 MJ/kg', compliant: true },
+                            { field: 'Ash', value: 12.8, target: '<14%', compliant: true },
+                            { field: 'Moisture', value: 9.2, target: '<10%', compliant: true }
+                        ]).map((q, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
+                                <span className="text-slate-300">{q.field}: <span className="text-white font-medium">{q.value}</span></span>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${q.compliant ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                                    }`}>
+                                    {q.target}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 

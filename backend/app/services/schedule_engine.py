@@ -397,7 +397,7 @@ class ScheduleEngine:
         Authoritative schedule with full optimization.
         
         All 8 stages executed with iteration until convergence.
-        Generates decision explanations.
+        Generates decision explanations and OptimiserDelay tasks.
         """
         diagnostics = []
         diagnostics.append("Starting Full Pass optimization...")
@@ -459,57 +459,134 @@ class ScheduleEngine:
         total_benefit = 0.0
         total_penalty = 0.0
         
-        # Iterate through periods
-        for period in periods:
-            if not candidates:
+        # Multi-iteration optimization loop (Stage 7: Feedback & Adjustment)
+        best_penalty = float('inf')
+        best_solution = None
+        iteration = 0
+        
+        while iteration < config.max_iterations:
+            iteration += 1
+            iteration_tasks = []
+            iteration_flows = []
+            iteration_explanations = []
+            iteration_tonnes = 0.0
+            iteration_cost = 0.0
+            iteration_benefit = 0.0
+            iteration_penalty = 0.0
+            
+            # Reset candidates for this iteration
+            working_candidates = candidates.copy()
+            
+            # Iterate through periods
+            for period in periods:
+                if not working_candidates:
+                    break
+                
+                # Stage 3: Resource assignment
+                period_usage = {}
+                assignments = self.resource_assigner.assign_resources(
+                    working_candidates, resources, period, period_usage
+                )
+                
+                # Stage 4: Material generation
+                parcels = self.material_generator.generate_parcels(
+                    assignments, period, config.schedule_version_id
+                )
+                
+                # Create tasks for assignments
+                for assign in assignments:
+                    # Check if rate reduction needed (Variable Production Control)
+                    rate_factor = self._calculate_rate_factor(assign, resources)
+                    
+                    if rate_factor < 1.0:
+                        # Generate OptimiserDelay task explaining the reduction
+                        delay_task = self._create_optimiser_delay_task(
+                            config.schedule_version_id,
+                            period.period_id,
+                            assign,
+                            rate_factor
+                        )
+                        iteration_tasks.append(delay_task)
+                        
+                        # Add explanation for why reduction was needed
+                        explanation = DecisionExplanation(
+                            explanation_id=str(uuid.uuid4()),
+                            schedule_version_id=config.schedule_version_id,
+                            period_id=period.period_id,
+                            decision_type="RateReduction",
+                            summary=f"Reduced rate to {rate_factor*100:.0f}% for {assign['area_name']}",
+                            binding_constraint=self._get_binding_constraint(assign),
+                            penalty_breakdown={"rate_reduction": (1-rate_factor) * 100}
+                        )
+                        iteration_explanations.append(explanation)
+                    
+                    task = Task(
+                        task_id=str(uuid.uuid4()),
+                        schedule_version_id=config.schedule_version_id,
+                        resource_id=assign['resource_id'],
+                        activity_id=assign['activity_id'],
+                        period_id=period.period_id,
+                        activity_area_id=assign['area_id'],
+                        planned_quantity=assign['assigned_quantity'] * rate_factor,
+                        material_type_id=assign.get('material_type_id'),
+                        quality_vector=assign.get('quality_vector'),
+                        task_type="Mining",
+                        status="Scheduled"
+                    )
+                    iteration_tasks.append(task)
+                    iteration_tonnes += assign['assigned_quantity'] * rate_factor
+                    
+                    # Remove from candidates
+                    working_candidates = [c for c in working_candidates if c['area_id'] != assign['area_id']]
+                
+                # Stage 5: Flow optimization (if network exists)
+                if network and parcels:
+                    flow_summary = self.flow_optimizer.optimize_period_flows(
+                        period.period_id,
+                        parcels,
+                        network,
+                        config.schedule_version_id
+                    )
+                    
+                    iteration_flows.extend(flow_summary.flow_results)
+                    iteration_explanations.extend(flow_summary.explanations)
+                    iteration_cost += flow_summary.total_cost
+                    iteration_benefit += flow_summary.total_benefit
+                    iteration_penalty += flow_summary.total_penalty
+            
+            # Stage 6: Processing optimization (wash plant)
+            # Handled within flow_optimizer.optimize_period_flows
+            
+            # Check if this iteration is better
+            if iteration_penalty < best_penalty:
+                best_penalty = iteration_penalty
+                best_solution = {
+                    'tasks': iteration_tasks,
+                    'flows': iteration_flows,
+                    'explanations': iteration_explanations,
+                    'tonnes': iteration_tonnes,
+                    'cost': iteration_cost,
+                    'benefit': iteration_benefit,
+                    'penalty': iteration_penalty
+                }
+                diagnostics.append(f"Iteration {iteration}: New best solution (penalty: {iteration_penalty:.2f})")
+            else:
+                diagnostics.append(f"Iteration {iteration}: No improvement")
+            
+            # Check convergence (gap < target)
+            if best_penalty == 0 or (iteration > 1 and abs(iteration_penalty - best_penalty) / max(best_penalty, 1) < config.target_gap_percent):
+                diagnostics.append(f"Converged after {iteration} iterations")
                 break
-            
-            # Stage 3: Resource assignment
-            period_usage = {}
-            assignments = self.resource_assigner.assign_resources(
-                candidates, resources, period, period_usage
-            )
-            
-            # Stage 4: Material generation
-            parcels = self.material_generator.generate_parcels(
-                assignments, period, config.schedule_version_id
-            )
-            
-            # Create tasks for assignments
-            for assign in assignments:
-                task = Task(
-                    task_id=str(uuid.uuid4()),
-                    schedule_version_id=config.schedule_version_id,
-                    resource_id=assign['resource_id'],
-                    activity_id=assign['activity_id'],
-                    period_id=period.period_id,
-                    activity_area_id=assign['area_id'],
-                    planned_quantity=assign['assigned_quantity'],
-                    material_type_id=assign.get('material_type_id'),
-                    quality_vector=assign.get('quality_vector'),
-                    task_type="Mining",
-                    status="Scheduled"
-                )
-                tasks_created.append(task)
-                total_tonnes += assign['assigned_quantity']
-                
-                # Remove from candidates
-                candidates = [c for c in candidates if c['area_id'] != assign['area_id']]
-            
-            # Stage 5: Flow optimization (if network exists)
-            if network and parcels:
-                flow_summary = self.flow_optimizer.optimize_period_flows(
-                    period.period_id,
-                    parcels,
-                    network,
-                    config.schedule_version_id
-                )
-                
-                all_flows.extend(flow_summary.flow_results)
-                all_explanations.extend(flow_summary.explanations)
-                total_cost += flow_summary.total_cost
-                total_benefit += flow_summary.total_benefit
-                total_penalty += flow_summary.total_penalty
+        
+        # Use best solution
+        if best_solution:
+            tasks_created = best_solution['tasks']
+            all_flows = best_solution['flows']
+            all_explanations = best_solution['explanations']
+            total_tonnes = best_solution['tonnes']
+            total_cost = best_solution['cost']
+            total_benefit = best_solution['benefit']
+            total_penalty = best_solution['penalty']
         
         # Stage 8: Finalize
         if tasks_created:
@@ -539,6 +616,51 @@ class ScheduleEngine:
             total_penalty=total_penalty,
             diagnostics=diagnostics,
             explanation_count=len(all_explanations)
+        )
+    
+    def _calculate_rate_factor(self, assignment: Dict, resources: List[Resource]) -> float:
+        """Calculate rate factor based on constraints."""
+        # Check if quality constraints require rate reduction
+        quality = assignment.get('quality_vector', {})
+        
+        # Example: reduce rate if quality is borderline
+        if quality.get('Ash', 0) > 18:  # High ash requires slower processing
+            return max(0.7, 1 - (quality['Ash'] - 18) * 0.05)
+        
+        # Check resource min rate factor
+        for resource in resources:
+            if resource.resource_id == assignment.get('resource_id'):
+                min_factor = getattr(resource, 'min_rate_factor', None) or 0.5
+                return max(min_factor, 1.0)
+        
+        return 1.0
+    
+    def _get_binding_constraint(self, assignment: Dict) -> str:
+        """Determine the binding constraint for rate reduction."""
+        quality = assignment.get('quality_vector', {})
+        
+        if quality.get('Ash', 0) > 18:
+            return f"Ash quality ({quality['Ash']:.1f}%) exceeds threshold"
+        
+        return "Resource capacity constraint"
+    
+    def _create_optimiser_delay_task(
+        self,
+        schedule_version_id: str,
+        period_id: str,
+        assignment: Dict,
+        rate_factor: float
+    ) -> Task:
+        """Create an OptimiserDelay task to explain rate reduction."""
+        return Task(
+            task_id=str(uuid.uuid4()),
+            schedule_version_id=schedule_version_id,
+            period_id=period_id,
+            activity_area_id=assignment['area_id'],
+            task_type="OptimiserDelay",
+            status="Scheduled",
+            delay_reason_code="RATE_REDUCTION",
+            notes=f"Rate reduced to {rate_factor*100:.0f}% due to {self._get_binding_constraint(assignment)}"
         )
     
     def create_run_request(
