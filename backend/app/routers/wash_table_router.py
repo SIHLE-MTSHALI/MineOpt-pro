@@ -86,10 +86,10 @@ def get_wash_tables(site_id: str, db: Session = Depends(get_db)):
         "site_id": site_id,
         "tables": [
             {
-                "table_id": t.table_id,
-                "table_name": t.table_name,
-                "source_description": t.source_description,
-                "table_type": t.table_type,
+                "table_id": t.wash_table_id,
+                "table_name": t.name,
+                "source_description": t.source_reference,
+                "table_type": t.table_format,
                 "row_count": len(t.rows) if t.rows else 0
             }
             for t in tables
@@ -101,7 +101,7 @@ def get_wash_tables(site_id: str, db: Session = Depends(get_db)):
 def get_wash_table(table_id: str, db: Session = Depends(get_db)):
     """Get a wash table with all rows."""
     table = db.query(WashTable)\
-        .filter(WashTable.table_id == table_id)\
+        .filter(WashTable.wash_table_id == table_id)\
         .first()
     
     if not table:
@@ -110,15 +110,15 @@ def get_wash_table(table_id: str, db: Session = Depends(get_db)):
     rows = sorted(table.rows, key=lambda r: r.rd_cutpoint) if table.rows else []
     
     return {
-        "table_id": table.table_id,
-        "table_name": table.table_name,
-        "source_description": table.source_description,
-        "table_type": table.table_type,
+        "table_id": table.wash_table_id,
+        "table_name": table.name,
+        "source_description": table.source_reference,
+        "table_type": table.table_format,
         "rows": [
             {
                 "row_id": r.row_id,
                 "rd_cutpoint": r.rd_cutpoint,
-                "cumulative_yield": r.cumulative_yield,
+                "cumulative_yield": r.cumulative_yield_fraction,
                 "product_quality": r.product_quality_vector,
                 "reject_quality": r.reject_quality_vector
             }
@@ -131,19 +131,19 @@ def get_wash_table(table_id: str, db: Session = Depends(get_db)):
 def create_wash_table(table: WashTableCreate, db: Session = Depends(get_db)):
     """Create a new wash table."""
     db_table = WashTable(
-        table_id=str(uuid.uuid4()),
+        wash_table_id=str(uuid.uuid4()),
         site_id=table.site_id,
-        table_name=table.table_name,
-        source_description=table.source_description,
-        table_type=table.table_type
+        name=table.table_name,
+        source_reference=table.source_description,
+        table_format=table.table_type
     )
     db.add(db_table)
     db.commit()
     db.refresh(db_table)
     
     return {
-        "table_id": db_table.table_id,
-        "table_name": db_table.table_name,
+        "table_id": db_table.wash_table_id,
+        "table_name": db_table.name,
         "message": "Wash table created"
     }
 
@@ -152,7 +152,7 @@ def create_wash_table(table: WashTableCreate, db: Session = Depends(get_db)):
 def add_table_row(table_id: str, row: WashTableRowCreate, db: Session = Depends(get_db)):
     """Add a row to a wash table."""
     table = db.query(WashTable)\
-        .filter(WashTable.table_id == table_id)\
+        .filter(WashTable.wash_table_id == table_id)\
         .first()
     
     if not table:
@@ -162,7 +162,7 @@ def add_table_row(table_id: str, row: WashTableRowCreate, db: Session = Depends(
         row_id=str(uuid.uuid4()),
         wash_table_id=table_id,
         rd_cutpoint=row.rd_cutpoint,
-        cumulative_yield=row.cumulative_yield,
+        cumulative_yield_fraction=row.cumulative_yield,
         product_quality_vector=row.product_quality_vector,
         reject_quality_vector=row.reject_quality_vector,
         sequence=row.sequence
@@ -177,7 +177,7 @@ def add_table_row(table_id: str, row: WashTableRowCreate, db: Session = Depends(
 def delete_wash_table(table_id: str, db: Session = Depends(get_db)):
     """Delete a wash table."""
     table = db.query(WashTable)\
-        .filter(WashTable.table_id == table_id)\
+        .filter(WashTable.wash_table_id == table_id)\
         .first()
     
     if not table:
@@ -191,7 +191,7 @@ def delete_wash_table(table_id: str, db: Session = Depends(get_db)):
     db.delete(table)
     db.commit()
     
-    return {"message": f"Wash table '{table.table_name}' deleted"}
+    return {"message": f"Wash table '{table.name}' deleted"}
 
 
 # =============================================================================
@@ -354,7 +354,7 @@ def get_operating_points(
 ):
     """Get wash plant operating points for a schedule."""
     points = db.query(WashPlantOperatingPoint)\
-        .filter(WashPlantOperatingPoint.wash_plant_node_id == node_id)\
+        .filter(WashPlantOperatingPoint.plant_node_id == node_id)\
         .filter(WashPlantOperatingPoint.schedule_version_id == schedule_version_id)\
         .order_by(WashPlantOperatingPoint.period_id)\
         .all()
@@ -365,7 +365,7 @@ def get_operating_points(
         "operating_points": [
             {
                 "period_id": p.period_id,
-                "cutpoint_rd": p.cutpoint_rd,
+                "cutpoint_rd": p.selected_rd_cutpoint,
                 "feed_tonnes": p.feed_tonnes,
                 "product_tonnes": p.product_tonnes,
                 "reject_tonnes": p.reject_tonnes,

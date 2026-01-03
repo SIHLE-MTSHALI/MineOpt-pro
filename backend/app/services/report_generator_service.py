@@ -21,9 +21,8 @@ from ..domain.models_scheduling import ScheduleVersion, Task
 from ..domain.models_calendar import Period
 from ..domain.models_flow import FlowNode, FlowNetwork
 from ..domain.models_resource import Resource, Activity, ActivityArea
-from ..domain.models_schedule_results import (
-    FlowResult, InventoryBalance, WashPlantOperatingPoint
-)
+from ..domain.models_schedule_results import FlowResult, InventoryBalance
+from ..domain.models_wash_table import WashPlantOperatingPoint
 
 
 @dataclass
@@ -506,12 +505,12 @@ class ReportGeneratorService:
         for op in ops:
             plant_data.append({
                 'period': op.period_id,
-                'plant': op.wash_plant_node_id,
+                'plant': op.plant_node_id,
                 'feed_tonnes': round(op.feed_tonnes, 0),
                 'product_tonnes': round(op.product_tonnes, 0),
                 'reject_tonnes': round(op.reject_tonnes, 0),
                 'yield_pct': round(op.yield_fraction * 100, 1),
-                'cutpoint': op.cutpoint_rd,
+                'cutpoint': op.selected_rd_cutpoint,
                 'mode': op.cutpoint_selection_mode
             })
             total_feed += op.feed_tonnes
@@ -550,7 +549,7 @@ class ReportGeneratorService:
                 for field, value in op.product_quality_vector.items():
                     compliance_data.append({
                         'period': op.period_id,
-                        'plant': op.wash_plant_node_id,
+                        'plant': op.plant_node_id,
                         'quality_field': field,
                         'value': round(value, 2),
                         'product_tonnes': round(op.product_tonnes, 0)
