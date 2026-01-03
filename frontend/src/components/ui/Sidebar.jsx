@@ -38,8 +38,8 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                 <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-6 mb-2">Configuration</div>
                 <SidebarItem icon={GitBranch} label="Flow Network" active={activeTab === 'flow-editor'} onClick={() => setActiveTab('flow-editor')} />
                 <SidebarItem icon={Package} label="Product Specs" active={activeTab === 'product-specs'} onClick={() => setActiveTab('product-specs')} />
-                <SidebarItem icon={Database} label="Data Model" active={activeTab === 'data'} onClick={() => setActiveTab('data')} />
-                <SidebarItem icon={Truck} label="Resources" active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} />
+                <SidebarItem icon={Database} label="Stockpiles" active={activeTab === 'data'} onClick={() => setActiveTab('data')} />
+                <SidebarItem icon={Truck} label="Wash Plant" active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} />
                 <SidebarItem icon={Layers} label="Geology" active={activeTab === 'geology'} onClick={() => setActiveTab('geology')} />
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
             </nav>

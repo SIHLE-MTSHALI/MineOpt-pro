@@ -5,6 +5,8 @@ import GanttChart from '../components/scheduler/GanttChart';
 import Dashboard from '../components/reporting/Dashboard';
 import FlowEditor from '../components/flow/FlowEditor';
 import QualitySpecs from '../components/quality/QualitySpecs';
+import StockpileManager from '../components/stockpile/StockpileManager';
+import WashPlantConfig from '../components/washplant/WashPlantConfig';
 import axios from 'axios';
 
 
@@ -285,7 +287,15 @@ const PlannerWorkspace = () => {
                         <QualitySpecs siteId={siteData.siteId} />
                     )}
 
-                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs'].includes(activeTab) && (
+                    {activeTab === 'data' && (
+                        <StockpileManager siteId={siteData.siteId} />
+                    )}
+
+                    {activeTab === 'resources' && (
+                        <WashPlantConfig siteId={siteData.siteId} />
+                    )}
+
+                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs', 'data', 'resources'].includes(activeTab) && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
                                 <h2 className="text-xl font-semibold mb-2">Module Under Construction</h2>
