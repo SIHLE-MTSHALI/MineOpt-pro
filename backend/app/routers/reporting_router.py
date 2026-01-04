@@ -262,6 +262,50 @@ def export_report_html(
     return HTMLResponse(content=html_content)
 
 
+@router.post("/export/pdf/{report_type}")
+def export_report_pdf(
+    report_type: str,
+    request: ReportRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Export a report as PDF.
+    
+    Generates a professionally styled PDF document suitable for printing.
+    Requires WeasyPrint to be installed.
+    """
+    from fastapi.responses import Response
+    
+    service = ReportGeneratorService(db)
+    report = service.generate_report(
+        report_type=report_type,
+        schedule_version_id=request.schedule_version_id,
+        period_ids=request.period_ids,
+        options=request.options
+    )
+    
+    try:
+        pdf_bytes = service.export_to_pdf(report)
+    except ImportError as e:
+        raise HTTPException(
+            status_code=501,
+            detail="PDF export not available. WeasyPrint is not installed."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate PDF: {str(e)}"
+        )
+    
+    filename = f"{report_type}_{request.schedule_version_id[:8]}.pdf"
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 # =============================================================================
 # Quick Summary Endpoints
 # =============================================================================

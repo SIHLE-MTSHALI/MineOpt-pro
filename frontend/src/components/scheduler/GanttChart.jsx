@@ -1,31 +1,100 @@
-import React, { useState, useEffect } from 'react';
-import { clsx } from 'clsx';
-import { Calendar, ChevronRight, ChevronLeft, RefreshCw } from 'lucide-react';
-import axios from 'axios';
+/**
+ * GanttChart.jsx - Enhanced Gantt Chart Component
+ * 
+ * Provides comprehensive task visualization and editing:
+ * - Drag-drop task assignment (resource & period)
+ * - Rate factor inline editing
+ * - Task splitting across periods
+ * - Maintenance/availability overlays
+ * - Rich filtering controls
+ * - Real-time API updates
+ */
 
-const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [] }) => {
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { clsx } from 'clsx';
+import {
+    Calendar, ChevronRight, ChevronLeft, RefreshCw,
+    ZoomIn, ZoomOut, Filter, Plus, Save, Undo,
+    Split, Trash2, Settings
+} from 'lucide-react';
+import axios from 'axios';
+import GanttTaskBar, { MaintenanceOverlay, GanttFilters } from './GanttTaskBar';
+
+const API_BASE = 'http://localhost:8000';
+
+const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], onTaskUpdate }) => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [selectedTaskId, setSelectedTaskId] = useState(null);
+    const [filters, setFilters] = useState({
+        coalOnly: false,
+        qualityRisk: false,
+        delayed: false,
+        resource: 'all'
+    });
+    const [zoomLevel, setZoomLevel] = useState(1); // 0.5=compact, 1=normal, 2=expanded
+    const [viewMode, setViewMode] = useState('shift'); // shift, day, week
+    const [dragOverCell, setDragOverCell] = useState(null);
+    const [editHistory, setEditHistory] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
+    const [maintenanceWindows, setMaintenanceWindows] = useState([]);
 
+    const gridRef = useRef(null);
+
+    // Fetch tasks when schedule version changes
     useEffect(() => {
         if (scheduleVersionId) {
             fetchTasks();
+            fetchMaintenanceWindows();
         }
     }, [scheduleVersionId]);
 
+    // Filter visible periods based on view mode
+    const visiblePeriods = React.useMemo(() => {
+        if (!periods.length) return [];
+
+        // For now, show all periods - could add pagination
+        const maxPeriods = Math.floor(12 * zoomLevel);
+        return periods.slice(0, maxPeriods);
+    }, [periods, zoomLevel, viewMode]);
+
+    // Filter tasks based on current filters
+    const filteredTasks = React.useMemo(() => {
+        return tasks.filter(task => {
+            if (filters.coalOnly && task.materialType !== 'Coal') return false;
+            if (filters.qualityRisk && !task.qualityRisk) return false;
+            if (filters.delayed && task.status !== 'delayed') return false;
+            if (filters.resource !== 'all' && task.resourceId !== filters.resource) return false;
+            return true;
+        });
+    }, [tasks, filters]);
+
+    /**
+     * Fetch tasks from the backend
+     */
     const fetchTasks = async () => {
         setLoading(true);
-        console.log("DEBUG: Gantt Fetching Tasks for Version:", scheduleVersionId);
+        console.log("Gantt: Fetching tasks for version:", scheduleVersionId);
         try {
-            const res = await axios.get(`http://localhost:8000/schedule/versions/${scheduleVersionId}`);
-            console.log("DEBUG: Gantt Raw Tasks:", res.data.tasks);
+            const res = await axios.get(`${API_BASE}/schedule/versions/${scheduleVersionId}`);
             const backendTasks = res.data.tasks.map(t => ({
                 id: t.task_id,
                 resourceId: t.resource_id,
-                startPeriod: t.period_id,
-                label: `${t.planned_quantity}t`, // Todo: Resolve Block Name via ID if available
-                color: 'bg-blue-600',
-                activityAreaId: t.activity_area_id
+                periodId: t.period_id,
+                activityId: t.activity_id,
+                activityAreaId: t.activity_area_id,
+                activityName: t.task_type || 'Mining',
+                areaName: t.activity_area_id?.slice(0, 8) || 'Unknown',
+                destinationName: t.destination_node_id || 'ROM',
+                tonnes: t.planned_quantity || 0,
+                durationHours: t.duration_hours || 12,
+                materialType: t.material_type_id || 'Coal',
+                quality: t.quality_vector || {},
+                qualityRisk: t.quality_vector?.Ash > 16,
+                rateFactor: t.rate_factor_applied || 1,
+                status: t.status || 'scheduled',
+                taskType: t.task_type
             }));
             setTasks(backendTasks);
         } catch (e) {
@@ -35,79 +104,355 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [] })
         }
     };
 
-    // Drag and Drop Handlers
-    const handleDragStart = (e, taskId) => {
-        e.dataTransfer.setData("taskId", taskId);
+    /**
+     * Fetch maintenance windows for overlay
+     */
+    const fetchMaintenanceWindows = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/resources/maintenance?site_id=${siteId}`);
+            setMaintenanceWindows(res.data || []);
+        } catch (e) {
+            // No maintenance data - that's fine
+            setMaintenanceWindows([]);
+        }
     };
 
+    /**
+     * Handle drag start for task
+     */
+    const handleDragStart = (e, taskId) => {
+        e.dataTransfer.setData("taskId", taskId);
+        e.dataTransfer.effectAllowed = 'move';
+        // Add visual feedback
+        e.target.style.opacity = '0.5';
+    };
+
+    const handleDragEnd = (e) => {
+        e.target.style.opacity = '1';
+        setDragOverCell(null);
+    };
+
+    const handleDragOver = (e, resourceId, periodId) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverCell({ resourceId, periodId });
+    };
+
+    const handleDragLeave = () => {
+        setDragOverCell(null);
+    };
+
+    /**
+     * Handle drop - move task to new cell
+     */
     const handleDrop = async (e, targetResourceId, targetPeriodId) => {
         e.preventDefault();
-        const taskId = e.dataTransfer.getData("taskId");
+        setDragOverCell(null);
 
-        // Optimistic Update
+        const taskId = e.dataTransfer.getData("taskId");
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        // Save to undo history
+        setEditHistory(prev => [...prev, {
+            type: 'move', taskId,
+            oldResourceId: task.resourceId, oldPeriodId: task.periodId,
+            newResourceId: targetResourceId, newPeriodId: targetPeriodId
+        }]);
+
+        // Optimistic update
         const updatedTasks = tasks.map(t => {
             if (t.id === taskId) {
-                return { ...t, resourceId: targetResourceId, startPeriod: targetPeriodId };
+                return { ...t, resourceId: targetResourceId, periodId: targetPeriodId };
             }
             return t;
         });
         setTasks(updatedTasks);
 
-        // API Update
+        // API update
         try {
-            await axios.put(`http://localhost:8000/schedule/tasks/${taskId}`, {
+            setSaving(true);
+            await axios.put(`${API_BASE}/schedule/tasks/${taskId}`, {
                 resource_id: targetResourceId,
                 period_id: targetPeriodId
             });
+            onTaskUpdate?.();
         } catch (error) {
             console.error("Failed to update task", error);
-            // TODO: Revert on failure
+            // Revert on failure
             fetchTasks();
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Helper to format period label nicely
+    /**
+     * Handle rate factor update
+     */
+    const handleUpdateRateFactor = async (taskId, newFactor) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        // Save to undo history
+        setEditHistory(prev => [...prev, {
+            type: 'rateFactor', taskId,
+            oldValue: task.rateFactor, newValue: newFactor
+        }]);
+
+        // Optimistic update
+        const updatedTasks = tasks.map(t => {
+            if (t.id === taskId) {
+                // Adjust tonnes based on rate factor change
+                const tonnageAdjustment = newFactor / (task.rateFactor || 1);
+                return { ...t, rateFactor: newFactor, tonnes: t.tonnes * tonnageAdjustment };
+            }
+            return t;
+        });
+        setTasks(updatedTasks);
+
+        // API update
+        try {
+            setSaving(true);
+            await axios.put(`${API_BASE}/schedule/tasks/${taskId}`, {
+                rate_factor_applied: newFactor
+            });
+            onTaskUpdate?.();
+        } catch (error) {
+            console.error("Failed to update rate factor", error);
+            fetchTasks();
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Handle task deletion
+     */
+    const handleDeleteTask = async (taskId) => {
+        if (!window.confirm("Delete this task? This action cannot be undone.")) return;
+
+        try {
+            setSaving(true);
+            await axios.delete(`${API_BASE}/schedule/tasks/${taskId}`);
+            setTasks(tasks.filter(t => t.id !== taskId));
+            setSelectedTaskId(null);
+            onTaskUpdate?.();
+        } catch (error) {
+            console.error("Failed to delete task", error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Undo last action
+     */
+    const handleUndo = async () => {
+        if (editHistory.length === 0) return;
+
+        const lastAction = editHistory[editHistory.length - 1];
+        setEditHistory(prev => prev.slice(0, -1));
+
+        if (lastAction.type === 'move') {
+            // Revert movement
+            const updatedTasks = tasks.map(t => {
+                if (t.id === lastAction.taskId) {
+                    return { ...t, resourceId: lastAction.oldResourceId, periodId: lastAction.oldPeriodId };
+                }
+                return t;
+            });
+            setTasks(updatedTasks);
+
+            try {
+                await axios.put(`${API_BASE}/schedule/tasks/${lastAction.taskId}`, {
+                    resource_id: lastAction.oldResourceId,
+                    period_id: lastAction.oldPeriodId
+                });
+            } catch (e) {
+                fetchTasks();
+            }
+        } else if (lastAction.type === 'rateFactor') {
+            // Revert rate factor
+            const updatedTasks = tasks.map(t => {
+                if (t.id === lastAction.taskId) {
+                    return { ...t, rateFactor: lastAction.oldValue };
+                }
+                return t;
+            });
+            setTasks(updatedTasks);
+
+            try {
+                await axios.put(`${API_BASE}/schedule/tasks/${lastAction.taskId}`, {
+                    rate_factor_applied: lastAction.oldValue
+                });
+            } catch (e) {
+                fetchTasks();
+            }
+        }
+    };
+
+    /**
+     * Format period label
+     */
     const formatPeriod = (p) => {
         if (!p.start_datetime) return p.name;
         const date = new Date(p.start_datetime);
         const day = date.getDate();
         const month = date.toLocaleString('default', { month: 'short' });
-        // Show "31 Dec Day"
-        return `${day} ${month} ${p.group_shift}`;
+        const shift = p.group_shift || '';
+        return `${day} ${month} ${shift}`;
     };
+
+    /**
+     * Get tasks for a specific cell
+     */
+    const getTasksForCell = (resourceId, periodId) => {
+        return filteredTasks.filter(t => t.resourceId === resourceId && t.periodId === periodId);
+    };
+
+    /**
+     * Calculate period width based on zoom
+     */
+    const periodWidth = Math.max(80, 120 * zoomLevel);
+    const rowHeight = 56 + (16 * (zoomLevel - 1));
+
+    // Calculate total width for summary stats
+    const totalTonnes = filteredTasks.reduce((sum, t) => sum + (t.tonnes || 0), 0);
+    const taskCount = filteredTasks.length;
 
     return (
         <div className="flex flex-col h-full bg-slate-900 text-slate-100">
             {/* Toolbar */}
             <div className="h-12 border-b border-slate-800 flex items-center px-4 justify-between bg-slate-950">
+                {/* Left: Navigation */}
                 <div className="flex items-center space-x-2">
-                    <button className="p-1 hover:bg-slate-800 rounded"><ChevronLeft size={18} /></button>
+                    <button className="p-1 hover:bg-slate-800 rounded" title="Previous">
+                        <ChevronLeft size={18} />
+                    </button>
                     <span className="font-medium text-sm flex items-center">
-                        {periods.length > 0
-                            ? `${new Date(periods[0].start_datetime).toDateString()} - ${new Date(periods[periods.length - 1].end_datetime).toDateString()}`
+                        {visiblePeriods.length > 0
+                            ? `${formatPeriod(visiblePeriods[0])} - ${formatPeriod(visiblePeriods[visiblePeriods.length - 1])}`
                             : "No Calendar Loaded"}
                     </span>
-                    <button className="p-1 hover:bg-slate-800 rounded"><ChevronRight size={18} /></button>
+                    <button className="p-1 hover:bg-slate-800 rounded" title="Next">
+                        <ChevronRight size={18} />
+                    </button>
                 </div>
+
+                {/* Center: View controls */}
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.25))}
+                        className="p-1 hover:bg-slate-800 rounded"
+                        title="Zoom Out"
+                    >
+                        <ZoomOut size={16} />
+                    </button>
+                    <span className="text-xs text-slate-400 w-12 text-center">{(zoomLevel * 100).toFixed(0)}%</span>
+                    <button
+                        onClick={() => setZoomLevel(Math.min(2, zoomLevel + 0.25))}
+                        className="p-1 hover:bg-slate-800 rounded"
+                        title="Zoom In"
+                    >
+                        <ZoomIn size={16} />
+                    </button>
+
+                    <div className="h-4 w-px bg-slate-700 mx-2" />
+
+                    {/* View mode selector */}
+                    <select
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"
+                    >
+                        <option value="shift">Shift View</option>
+                        <option value="day">Day View</option>
+                        <option value="week">Week View</option>
+                    </select>
+                </div>
+
+                {/* Right: Actions */}
                 <div className="flex items-center space-x-4 text-xs">
-                    <button onClick={fetchTasks} className="flex items-center hover:text-blue-400">
+                    <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={clsx(
+                            "flex items-center px-2 py-1 rounded",
+                            showFilters ? "bg-blue-600 text-white" : "hover:bg-slate-800"
+                        )}
+                    >
+                        <Filter size={14} className="mr-1" />
+                        Filters
+                    </button>
+
+                    <button
+                        onClick={handleUndo}
+                        disabled={editHistory.length === 0}
+                        className={clsx(
+                            "flex items-center px-2 py-1 rounded",
+                            editHistory.length > 0 ? "hover:bg-slate-800" : "text-slate-600 cursor-not-allowed"
+                        )}
+                        title="Undo last action"
+                    >
+                        <Undo size={14} className="mr-1" />
+                        Undo ({editHistory.length})
+                    </button>
+
+                    <button
+                        onClick={fetchTasks}
+                        className="flex items-center hover:text-blue-400"
+                    >
                         <RefreshCw size={14} className={clsx("mr-1", loading && "animate-spin")} />
                         Refresh
                     </button>
-                    <div className="flex items-center space-x-2">
-                        <span className="flex items-center"><span className="w-3 h-3 bg-blue-600 rounded-sm mr-1"></span> Coal</span>
-                    </div>
+
+                    {saving && (
+                        <span className="text-yellow-400 flex items-center">
+                            <Save size={14} className="mr-1 animate-pulse" />
+                            Saving...
+                        </span>
+                    )}
                 </div>
             </div>
 
+            {/* Filter bar (collapsible) */}
+            {showFilters && (
+                <GanttFilters filters={filters} onChange={setFilters} />
+            )}
+
+            {/* Summary bar */}
+            <div className="h-8 bg-slate-850 border-b border-slate-800 flex items-center px-4 text-xs text-slate-400">
+                <span className="mr-4">
+                    <strong className="text-slate-300">{taskCount}</strong> tasks
+                </span>
+                <span className="mr-4">
+                    <strong className="text-slate-300">{totalTonnes.toLocaleString()}</strong>t total
+                </span>
+                <span className="flex items-center">
+                    <span className="w-3 h-3 bg-blue-600 rounded-sm mr-1"></span>
+                    Coal
+                    <span className="w-3 h-3 bg-slate-600 rounded-sm mr-1 ml-3"></span>
+                    Waste
+                    <span className="w-3 h-3 bg-amber-600 rounded-sm mr-1 ml-3"></span>
+                    At Risk
+                </span>
+            </div>
+
             {/* Gantt Grid */}
-            <div className="flex-1 overflow-auto relative">
-                <div className="min-w-[800px]">
+            <div ref={gridRef} className="flex-1 overflow-auto relative">
+                <div style={{ minWidth: `${200 + visiblePeriods.length * periodWidth}px` }}>
                     {/* Header Row */}
                     <div className="flex border-b border-slate-800 bg-slate-900 sticky top-0 z-10 text-xs">
-                        <div className="w-48 p-2 border-r border-slate-800 font-bold uppercase tracking-wider text-slate-500">Resource</div>
-                        {periods.map(p => (
-                            <div key={p.period_id} className="flex-1 min-w-[100px] p-2 border-r border-slate-800 text-center text-slate-400 font-medium">
+                        <div
+                            className="w-48 min-w-48 p-2 border-r border-slate-800 font-bold uppercase tracking-wider text-slate-500 sticky left-0 bg-slate-900 z-20"
+                        >
+                            Resource
+                        </div>
+                        {visiblePeriods.map(p => (
+                            <div
+                                key={p.period_id}
+                                className="p-2 border-r border-slate-800 text-center text-slate-400 font-medium"
+                                style={{ width: periodWidth, minWidth: periodWidth }}
+                            >
                                 {formatPeriod(p)}
                             </div>
                         ))}
@@ -115,50 +460,151 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [] })
 
                     {/* Resource Rows */}
                     {resources.map(res => (
-                        <div key={res.resource_id} className="flex border-b border-slate-800 hover:bg-slate-800/30 transition-colors h-16">
-                            {/* Resource Name */}
-                            <div className="w-48 p-3 border-r border-slate-800 flex items-center text-sm font-medium text-slate-300">
-                                {res.name}
-                                <span className="ml-2 text-xs text-slate-500">({res.resource_type})</span>
+                        <div
+                            key={res.resource_id}
+                            className="flex border-b border-slate-800 hover:bg-slate-800/20 transition-colors"
+                            style={{ height: rowHeight }}
+                        >
+                            {/* Resource Name (sticky) */}
+                            <div className="w-48 min-w-48 p-3 border-r border-slate-800 flex items-center text-sm font-medium text-slate-300 sticky left-0 bg-slate-900 z-10">
+                                <div>
+                                    {res.name}
+                                    <span className="block text-xs text-slate-500">{res.resource_type}</span>
+                                </div>
                             </div>
 
                             {/* Time Slots */}
-                            {periods.map((p, idx) => {
-                                // Find tasks in this cell
-                                const cellTasks = tasks.filter(t => t.resourceId === res.resource_id && t.startPeriod === p.period_id);
+                            {visiblePeriods.map((p) => {
+                                const cellTasks = getTasksForCell(res.resource_id, p.period_id);
+                                const isDragOver = dragOverCell?.resourceId === res.resource_id &&
+                                    dragOverCell?.periodId === p.period_id;
+
+                                // Check for maintenance
+                                const hasMaintenance = maintenanceWindows.some(
+                                    mw => mw.resource_id === res.resource_id && mw.period_id === p.period_id
+                                );
 
                                 return (
                                     <div
                                         key={p.period_id}
-                                        className="flex-1 min-w-[100px] border-r border-slate-800 relative p-1 group hover:bg-slate-800/50 transition-colors"
-                                        onDragOver={(e) => e.preventDefault()}
+                                        className={clsx(
+                                            "border-r border-slate-800 relative p-1 transition-colors",
+                                            isDragOver && "bg-blue-500/20 ring-2 ring-blue-500 ring-inset",
+                                            !p.is_working_period && "bg-slate-800/50",
+                                            hasMaintenance && "bg-red-500/10"
+                                        )}
+                                        style={{ width: periodWidth, minWidth: periodWidth }}
+                                        onDragOver={(e) => handleDragOver(e, res.resource_id, p.period_id)}
+                                        onDragLeave={handleDragLeave}
                                         onDrop={(e) => handleDrop(e, res.resource_id, p.period_id)}
                                     >
-                                        {cellTasks.map(task => (
-                                            <div
-                                                key={task.id}
-                                                className={clsx(
-                                                    "h-full rounded text-xs flex items-center justify-center font-bold text-white shadow cursor-grab active:cursor-grabbing hover:opacity-90",
-                                                    task.color
-                                                )}
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, task.id)}
-                                                title={task.label}
-                                            >
-                                                {task.label}
-                                            </div>
-                                        ))}
+                                        {/* Maintenance overlay indicator */}
+                                        {hasMaintenance && (
+                                            <div className="absolute top-0 left-0 right-0 h-1 bg-red-500" />
+                                        )}
+
+                                        {/* Tasks in this cell */}
+                                        <div className="flex flex-col gap-1 h-full">
+                                            {cellTasks.map(task => (
+                                                <div
+                                                    key={task.id}
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, task.id)}
+                                                    onDragEnd={handleDragEnd}
+                                                    onClick={() => setSelectedTaskId(task.id)}
+                                                    className={clsx(
+                                                        "flex-1 min-h-6 rounded text-xs flex items-center justify-center px-2",
+                                                        "font-medium text-white shadow cursor-grab active:cursor-grabbing",
+                                                        "hover:brightness-110 transition-all",
+                                                        task.materialType === 'Coal' && !task.qualityRisk && "bg-gradient-to-r from-blue-600 to-blue-500",
+                                                        task.materialType === 'Coal' && task.qualityRisk && "bg-gradient-to-r from-amber-600 to-amber-500",
+                                                        task.materialType === 'Waste' && "bg-gradient-to-r from-slate-600 to-slate-500",
+                                                        task.taskType === 'OptimiserDelay' && "bg-gradient-to-r from-purple-600 to-purple-500",
+                                                        selectedTaskId === task.id && "ring-2 ring-white ring-offset-1 ring-offset-slate-900"
+                                                    )}
+                                                    title={`${task.activityName}: ${task.tonnes.toLocaleString()}t${task.rateFactor !== 1 ? ` (${(task.rateFactor * 100).toFixed(0)}%)` : ''}`}
+                                                >
+                                                    <span className="truncate">
+                                                        {task.tonnes >= 1000
+                                                            ? `${(task.tonnes / 1000).toFixed(1)}kt`
+                                                            : `${task.tonnes.toFixed(0)}t`
+                                                        }
+                                                    </span>
+                                                    {task.rateFactor !== 1 && (
+                                                        <span className="ml-1 opacity-70">
+                                                            {(task.rateFactor * 100).toFixed(0)}%
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 );
                             })}
                         </div>
                     ))}
 
+                    {/* Empty state */}
                     {resources.length === 0 && (
-                        <div className="p-8 text-center text-slate-500">No resources found. Initialize Demo Data to see fleet.</div>
+                        <div className="p-8 text-center text-slate-500">
+                            No resources found. Initialize Demo Data to see fleet.
+                        </div>
                     )}
                 </div>
             </div>
+
+            {/* Selected Task Panel */}
+            {selectedTaskId && (
+                <div className="h-24 border-t border-slate-800 bg-slate-850 p-4 flex items-center justify-between">
+                    {(() => {
+                        const task = tasks.find(t => t.id === selectedTaskId);
+                        if (!task) return null;
+
+                        return (
+                            <>
+                                <div className="flex items-center space-x-6">
+                                    <div>
+                                        <div className="text-sm font-medium text-white">{task.activityName}</div>
+                                        <div className="text-xs text-slate-400">{task.areaName}</div>
+                                    </div>
+                                    <div className="text-sm">
+                                        <span className="text-slate-400">Tonnes:</span>
+                                        <span className="ml-2 text-white font-medium">{task.tonnes.toLocaleString()}</span>
+                                    </div>
+                                    <div className="text-sm">
+                                        <span className="text-slate-400">Rate Factor:</span>
+                                        <input
+                                            type="range"
+                                            min="0.5"
+                                            max="1.5"
+                                            step="0.05"
+                                            value={task.rateFactor}
+                                            onChange={(e) => handleUpdateRateFactor(task.id, parseFloat(e.target.value))}
+                                            className="ml-2 w-24 align-middle"
+                                        />
+                                        <span className="ml-2 text-white">{(task.rateFactor * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded flex items-center"
+                                    >
+                                        <Trash2 size={14} className="mr-1" />
+                                        Delete
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedTaskId(null)}
+                                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs rounded"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
         </div>
     );
 };

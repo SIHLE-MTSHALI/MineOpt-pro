@@ -93,6 +93,7 @@ class TaskUpdate(BaseModel):
     period_id: Optional[str] = None
     activity_area_id: Optional[str] = None
     planned_quantity: Optional[float] = None
+    rate_factor_applied: Optional[float] = None
 
 @router.put("/tasks/{task_id}")
 def update_task(task_id: str, updates: TaskUpdate, db: Session = Depends(get_db)):
@@ -108,6 +109,8 @@ def update_task(task_id: str, updates: TaskUpdate, db: Session = Depends(get_db)
         task.activity_area_id = updates.activity_area_id
     if updates.planned_quantity is not None:
         task.planned_quantity = updates.planned_quantity
+    if updates.rate_factor_applied is not None:
+        task.rate_factor_applied = updates.rate_factor_applied
         
     db.commit()
     db.refresh(task)

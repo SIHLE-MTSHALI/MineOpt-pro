@@ -32,6 +32,7 @@ from ..domain.models_schedule_results import (
 )
 from .blending_service import BlendingService, blending_service
 from .flow_optimizer import FlowOptimizer
+from .lp_allocator import LPMaterialAllocator, create_lp_allocator
 
 
 @dataclass
@@ -44,6 +45,7 @@ class ScheduleRunConfig:
     objective_profile_id: Optional[str] = None
     max_iterations: int = 5
     target_gap_percent: float = 0.01
+    use_lp_solver: bool = True  # Use LP solver for Full Pass (False = greedy)
     
 
 @dataclass
@@ -273,6 +275,7 @@ class ScheduleEngine:
         self.resource_assigner = ResourceAssigner(db)
         self.material_generator = MaterialGenerator(db)
         self.flow_optimizer = FlowOptimizer(db)
+        self.lp_allocator = create_lp_allocator(db)  # LP-based optimizer
         self.blending = blending_service
     
     def run_fast_pass(self, config: ScheduleRunConfig) -> ScheduleRunResult:
@@ -541,18 +544,38 @@ class ScheduleEngine:
                 
                 # Stage 5: Flow optimization (if network exists)
                 if network and parcels:
-                    flow_summary = self.flow_optimizer.optimize_period_flows(
-                        period.period_id,
-                        parcels,
-                        network,
-                        config.schedule_version_id
-                    )
-                    
-                    iteration_flows.extend(flow_summary.flow_results)
-                    iteration_explanations.extend(flow_summary.explanations)
-                    iteration_cost += flow_summary.total_cost
-                    iteration_benefit += flow_summary.total_benefit
-                    iteration_penalty += flow_summary.total_penalty
+                    if config.use_lp_solver:
+                        # Use LP solver for optimal allocation
+                        lp_result = self.lp_allocator.solve_allocation(
+                            parcels=parcels,
+                            network=network,
+                            period_id=period.period_id,
+                            schedule_version_id=config.schedule_version_id,
+                            existing_node_loads={}  # Could track across periods
+                        )
+                        if lp_result.success:
+                            iteration_flows.extend(lp_result.flow_results)
+                            iteration_explanations.extend(lp_result.explanations)
+                            iteration_cost += lp_result.total_cost
+                            iteration_penalty += lp_result.total_penalty
+                            # Calculate benefit from flows
+                            for flow in lp_result.flow_results:
+                                iteration_benefit += flow.benefit or 0.0
+                        else:
+                            diagnostics.append(f"LP solver failed: {lp_result.solver_message}")
+                    else:
+                        # Use greedy optimizer (fallback)
+                        flow_summary = self.flow_optimizer.optimize_period_flows(
+                            period.period_id,
+                            parcels,
+                            network,
+                            config.schedule_version_id
+                        )
+                        iteration_flows.extend(flow_summary.flow_results)
+                        iteration_explanations.extend(flow_summary.explanations)
+                        iteration_cost += flow_summary.total_cost
+                        iteration_benefit += flow_summary.total_benefit
+                        iteration_penalty += flow_summary.total_penalty
             
             # Stage 6: Processing optimization (wash plant)
             # Handled within flow_optimizer.optimize_period_flows

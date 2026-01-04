@@ -669,6 +669,290 @@ class ReportGeneratorService:
         
         return html
     
+    def export_to_pdf(self, report: GeneratedReport) -> bytes:
+        """
+        Export report to PDF format.
+        
+        Uses WeasyPrint to convert HTML to a styled PDF document.
+        Returns PDF as bytes for streaming or saving.
+        """
+        try:
+            from weasyprint import HTML, CSS
+        except ImportError:
+            raise ImportError(
+                "WeasyPrint is required for PDF export. "
+                "Install with: pip install weasyprint"
+            )
+        
+        # Generate enhanced HTML for print
+        html_content = self._generate_print_html(report)
+        
+        # Convert to PDF
+        html_doc = HTML(string=html_content)
+        pdf_bytes = html_doc.write_pdf()
+        
+        return pdf_bytes
+    
+    def _generate_print_html(self, report: GeneratedReport) -> str:
+        """Generate HTML optimized for PDF printing."""
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{report.metadata.title}</title>
+    <style>
+        @page {{
+            size: A4;
+            margin: 2cm;
+            @top-center {{
+                content: "{report.metadata.title}";
+                font-size: 10pt;
+                color: #666;
+            }}
+            @bottom-center {{
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9pt;
+                color: #666;
+            }}
+        }}
+        
+        body {{
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #333;
+        }}
+        
+        .header {{
+            border-bottom: 2px solid #1e3a5f;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }}
+        
+        h1 {{
+            color: #1e3a5f;
+            font-size: 24pt;
+            margin: 0 0 10px 0;
+        }}
+        
+        h2 {{
+            color: #1e3a5f;
+            font-size: 14pt;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+            margin-top: 25px;
+            page-break-after: avoid;
+        }}
+        
+        h3 {{
+            color: #333;
+            font-size: 12pt;
+            margin-top: 15px;
+        }}
+        
+        .meta {{
+            color: #666;
+            font-size: 10pt;
+        }}
+        
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 9pt;
+            page-break-inside: avoid;
+        }}
+        
+        th {{
+            background-color: #1e3a5f;
+            color: white;
+            padding: 8px 6px;
+            text-align: left;
+            font-weight: bold;
+        }}
+        
+        td {{
+            border: 1px solid #ddd;
+            padding: 6px;
+        }}
+        
+        tr:nth-child(even) {{
+            background-color: #f8f9fa;
+        }}
+        
+        .summary-box {{
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-left: 4px solid #1e3a5f;
+            padding: 15px 20px;
+            margin-top: 30px;
+            page-break-inside: avoid;
+        }}
+        
+        .summary-box h2 {{
+            color: #1e3a5f;
+            margin-top: 0;
+            border: none;
+            font-size: 13pt;
+        }}
+        
+        .summary-box ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        
+        .summary-box li {{
+            margin: 5px 0;
+        }}
+        
+        .kpi-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }}
+        
+        .kpi-card {{
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            text-align: center;
+            border-radius: 4px;
+        }}
+        
+        .kpi-value {{
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1e3a5f;
+        }}
+        
+        .kpi-label {{
+            font-size: 9pt;
+            color: #666;
+            margin-top: 5px;
+        }}
+        
+        .positive {{
+            color: #28a745;
+        }}
+        
+        .negative {{
+            color: #dc3545;
+        }}
+        
+        .warning {{
+            color: #ffc107;
+        }}
+        
+        .footer {{
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 9pt;
+            color: #666;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{report.metadata.title}</h1>
+        <p class="meta">
+            Generated: {report.metadata.generated_at}<br>
+            Schedule Version: {report.metadata.schedule_version_id or 'N/A'}<br>
+            Site: {report.metadata.site_name or 'N/A'}
+        </p>
+    </div>
+"""
+        
+        # Render KPI summary if available
+        if report.summary:
+            kpi_items = []
+            for key, value in report.summary.items():
+                if isinstance(value, (int, float)):
+                    if 'tonnes' in key.lower() or 'tonnage' in key.lower():
+                        kpi_items.append((key, f"{value:,.0f}t"))
+                    elif 'cost' in key.lower() or 'value' in key.lower() or 'benefit' in key.lower():
+                        kpi_items.append((key, f"${value:,.0f}"))
+                    elif 'percent' in key.lower() or '%' in key:
+                        kpi_items.append((key, f"{value:.1f}%"))
+                    else:
+                        kpi_items.append((key, f"{value:,.2f}"))
+            
+            if kpi_items:
+                html += '<div class="kpi-grid">'
+                for label, value in kpi_items[:6]:  # Max 6 KPIs
+                    html += f'''
+                    <div class="kpi-card">
+                        <div class="kpi-value">{value}</div>
+                        <div class="kpi-label">{label.replace("_", " ").title()}</div>
+                    </div>'''
+                html += '</div>'
+        
+        # Render sections
+        for section in report.sections:
+            html += f'<h2>{section.title}</h2>'
+            
+            if section.content_type == 'table' and section.data:
+                html += '<table><thead><tr>'
+                headers = list(section.data[0].keys())
+                for h in headers:
+                    html += f'<th>{h.replace("_", " ").title()}</th>'
+                html += '</tr></thead><tbody>'
+                
+                for row in section.data:
+                    html += '<tr>'
+                    for h in headers:
+                        val = row.get(h, '')
+                        if isinstance(val, dict):
+                            val = json.dumps(val)
+                        elif isinstance(val, float):
+                            val = f"{val:,.2f}"
+                        html += f'<td>{val}</td>'
+                    html += '</tr>'
+                html += '</tbody></table>'
+                
+            elif section.content_type == 'summary':
+                html += f'<p>{section.data}</p>'
+                
+            elif section.content_type == 'kpi':
+                html += '<div class="kpi-grid">'
+                if isinstance(section.data, dict):
+                    for k, v in section.data.items():
+                        html += f'''
+                        <div class="kpi-card">
+                            <div class="kpi-value">{v}</div>
+                            <div class="kpi-label">{k}</div>
+                        </div>'''
+                html += '</div>'
+        
+        # Summary box
+        if report.summary:
+            html += '''
+            <div class="summary-box">
+                <h2>Summary</h2>
+                <ul>'''
+            for k, v in report.summary.items():
+                if isinstance(v, float):
+                    v = f"{v:,.2f}"
+                html += f'<li><strong>{k.replace("_", " ").title()}:</strong> {v}</li>'
+            html += '''
+                </ul>
+            </div>'''
+        
+        # Footer
+        html += f'''
+    <div class="footer">
+        <p>
+            Report generated by MineOpt Pro Enterprise | 
+            {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
+        </p>
+    </div>
+</body>
+</html>'''
+        
+        return html
+    
     # -------------------------------------------------------------------------
     # Helper Methods
     # -------------------------------------------------------------------------
