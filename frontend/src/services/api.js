@@ -36,10 +36,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        // Only clear token and redirect for auth-specific 401 errors
+        // (when trying to access /auth/users/me and it fails)
         if (error.response?.status === 401) {
-            // Token expired or invalid
-            localStorage.removeItem('token');
-            window.location.href = '/';
+            const isAuthEndpoint = error.config?.url?.includes('/auth/');
+            if (isAuthEndpoint) {
+                // Token is truly invalid - clear and redirect
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+            // For other endpoints, just let the error propagate
+            // Components should handle missing data gracefully
         }
         return Promise.reject(error);
     }

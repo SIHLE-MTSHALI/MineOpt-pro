@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/ui/Sidebar';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
 import Viewport3D from '../components/spatial/Viewport3D';
 import GanttChart from '../components/scheduler/GanttChart';
 import ScheduleControl from '../components/scheduler/ScheduleControl';
@@ -14,7 +15,8 @@ import axios from 'axios';
 
 
 const PlannerWorkspace = () => {
-    const [activeTab, setActiveTab] = useState('spatial');
+    // Default to 'reporting' tab to avoid Three.js/WebGL crash on initial load
+    const [activeTab, setActiveTab] = useState('reporting');
 
     // Site Data State
     const [siteData, setSiteData] = useState({
@@ -55,9 +57,13 @@ const PlannerWorkspace = () => {
                 } catch (e) { console.warn("Activity Areas endpoint missing"); }
 
                 // 3. Get Schedules for Site (Versions)
-                const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteId}/versions`);
-                const versions = schedRes.data;
-                const activeScheduleId = versions.length > 0 ? versions[0].version_id : null;
+                let versions = [];
+                let activeScheduleId = null;
+                try {
+                    const schedRes = await axios.get(`http://localhost:8000/schedule/site/${siteId}/versions`);
+                    versions = schedRes.data;
+                    activeScheduleId = versions.length > 0 ? versions[0].version_id : null;
+                } catch (e) { console.warn("Schedule versions endpoint missing"); }
 
                 // 3b. Get Flow Network Nodes (Stockpiles, Plants, Dumps)
                 let flowNodes = [];
@@ -68,12 +74,14 @@ const PlannerWorkspace = () => {
 
                 // 4. Get Calendar & Periods
                 let sitePeriods = [];
-                const calRes = await axios.get(`http://localhost:8000/calendar/site/${siteId}`);
-                if (calRes.data.length > 0) {
-                    const calId = calRes.data[0].calendar_id;
-                    const perRes = await axios.get(`http://localhost:8000/calendar/${calId}/periods`);
-                    sitePeriods = perRes.data;
-                }
+                try {
+                    const calRes = await axios.get(`http://localhost:8000/calendar/site/${siteId}`);
+                    if (calRes.data.length > 0) {
+                        const calId = calRes.data[0].calendar_id;
+                        const perRes = await axios.get(`http://localhost:8000/calendar/${calId}/periods`);
+                        sitePeriods = perRes.data;
+                    }
+                } catch (e) { console.warn("Calendar/Periods endpoint missing"); }
 
                 // 5. Get Tasks for Simulation (active schedule)
                 let tasks = [];
@@ -256,14 +264,16 @@ const PlannerWorkspace = () => {
                     )}
 
                     {activeTab === 'spatial' && (
-                        <div className="h-full w-full">
-                            <Viewport3D
-                                siteData={siteData}
-                                onBlockSelect={setSelectedBlock}
-                                selectedBlock={selectedBlock}
-                                flowNodes={siteData.flowNodes}
-                            />
-                        </div>
+                        <ErrorBoundary componentName="3D Spatial View">
+                            <div className="h-full w-full">
+                                <Viewport3D
+                                    siteData={siteData}
+                                    onBlockSelect={setSelectedBlock}
+                                    selectedBlock={selectedBlock}
+                                    flowNodes={siteData.flowNodes}
+                                />
+                            </div>
+                        </ErrorBoundary>
                     )}
 
                     {activeTab === 'gantt' && (
