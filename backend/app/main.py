@@ -21,7 +21,8 @@ from .routers import (
     wash_table_router,
     security_router,
     cp_solver_router,
-    flow_router
+    flow_router,
+    websocket_router
 )
 from .database import engine, Base
 
@@ -88,6 +89,7 @@ app.include_router(wash_table_router.router)
 app.include_router(security_router.router)
 app.include_router(cp_solver_router.router)
 app.include_router(flow_router.router)
+app.include_router(websocket_router.router)
 
 
 @app.get("/")
