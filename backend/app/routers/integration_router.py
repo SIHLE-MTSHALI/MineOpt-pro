@@ -393,3 +393,241 @@ def get_import_history(
         "records": history
     }
 
+
+# =============================================================================
+# Connector Management
+# =============================================================================
+
+class ConnectorCreate(BaseModel):
+    connector_type: str  # 'fms', 'lims'
+    name: str
+    site_id: str
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    sync_interval_seconds: int = 300
+    custom_settings: Dict = {}
+
+
+@router.get("/connectors")
+def list_connectors():
+    """List all registered connectors."""
+    from ..services.connectors import connector_registry
+    
+    return {
+        "connectors": [
+            {
+                "connector_id": s.connector_id,
+                "status": s.status.value,
+                "last_sync": s.last_sync.isoformat() if s.last_sync else None,
+                "last_error": s.last_error,
+                "metrics": s.metrics
+            }
+            for s in connector_registry.list_connectors()
+        ]
+    }
+
+
+@router.post("/connectors")
+def create_connector(config: ConnectorCreate):
+    """Create and register a new connector."""
+    import uuid
+    from ..services.connectors import (
+        ConnectorConfig, ConnectorType, 
+        create_connector as factory_create, connector_registry
+    )
+    
+    connector_config = ConnectorConfig(
+        connector_id=str(uuid.uuid4()),
+        connector_type=ConnectorType(config.connector_type),
+        name=config.name,
+        site_id=config.site_id,
+        base_url=config.base_url,
+        api_key=config.api_key,
+        username=config.username,
+        password=config.password,
+        sync_interval_seconds=config.sync_interval_seconds,
+        custom_settings=config.custom_settings
+    )
+    
+    connector = factory_create(connector_config)
+    connector_registry.register(connector)
+    
+    return {
+        "connector_id": connector.connector_id,
+        "message": "Connector registered successfully"
+    }
+
+
+@router.post("/connectors/{connector_id}/test")
+async def test_connector(connector_id: str):
+    """Test connection to external system."""
+    from ..services.connectors import connector_registry
+    
+    connector = connector_registry.get(connector_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    success = await connector.test_connection()
+    
+    return {
+        "connector_id": connector_id,
+        "success": success,
+        "status": connector.get_status().status.value
+    }
+
+
+@router.post("/connectors/{connector_id}/sync")
+async def sync_connector(connector_id: str, sync_type: str = "pull"):
+    """Trigger a sync operation for a connector."""
+    from ..services.connectors import connector_registry
+    
+    connector = connector_registry.get(connector_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    result = await connector.sync_data(sync_type)
+    
+    return {
+        "connector_id": connector_id,
+        "success": result.success,
+        "records_processed": result.records_processed,
+        "records_created": result.records_created,
+        "records_updated": result.records_updated,
+        "records_failed": result.records_failed,
+        "duration_ms": result.duration_ms,
+        "error_message": result.error_message
+    }
+
+
+@router.delete("/connectors/{connector_id}")
+def delete_connector(connector_id: str):
+    """Unregister a connector."""
+    from ..services.connectors import connector_registry
+    
+    connector = connector_registry.get(connector_id)
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    connector_registry.unregister(connector_id)
+    
+    return {"message": "Connector unregistered"}
+
+
+# =============================================================================
+# Webhook Management
+# =============================================================================
+
+class WebhookCreate(BaseModel):
+    site_id: str
+    url: str
+    secret: Optional[str] = None
+    event_types: List[str] = []  # Empty = all events
+    headers: Dict[str, str] = {}
+
+
+@router.get("/webhooks")
+def list_webhooks(site_id: Optional[str] = None):
+    """List registered webhooks."""
+    from ..services.connectors import webhook_publisher
+    
+    webhooks = webhook_publisher.list_webhooks(site_id)
+    
+    return {
+        "webhooks": [
+            {
+                "webhook_id": w.webhook_id,
+                "site_id": w.site_id,
+                "url": w.url,
+                "event_types": w.event_types,
+                "enabled": w.enabled,
+                "created_at": w.created_at.isoformat()
+            }
+            for w in webhooks
+        ]
+    }
+
+
+@router.post("/webhooks")
+def register_webhook(webhook: WebhookCreate):
+    """Register a new webhook endpoint."""
+    import uuid
+    from ..services.connectors import WebhookRegistration, webhook_publisher
+    
+    registration = WebhookRegistration(
+        webhook_id=str(uuid.uuid4()),
+        site_id=webhook.site_id,
+        url=webhook.url,
+        secret=webhook.secret,
+        event_types=webhook.event_types,
+        headers=webhook.headers
+    )
+    
+    webhook_publisher.register_webhook(registration)
+    
+    return {
+        "webhook_id": registration.webhook_id,
+        "message": "Webhook registered successfully"
+    }
+
+
+@router.delete("/webhooks/{webhook_id}")
+def unregister_webhook(webhook_id: str):
+    """Unregister a webhook."""
+    from ..services.connectors import webhook_publisher
+    
+    webhook = webhook_publisher.get_webhook(webhook_id)
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    
+    webhook_publisher.unregister_webhook(webhook_id)
+    
+    return {"message": "Webhook unregistered"}
+
+
+@router.get("/webhooks/{webhook_id}/deliveries")
+def get_webhook_deliveries(webhook_id: str, limit: int = 50):
+    """Get delivery history for a webhook."""
+    from ..services.connectors import webhook_publisher
+    
+    deliveries = webhook_publisher.get_delivery_history(webhook_id, limit)
+    
+    return {
+        "webhook_id": webhook_id,
+        "delivery_count": len(deliveries),
+        "deliveries": deliveries
+    }
+
+
+@router.post("/webhooks/test")
+async def test_webhook(url: str, event_type: str = "test.ping"):
+    """Send a test webhook to verify endpoint."""
+    from ..services.connectors import WebhookEventType, webhook_publisher
+    import uuid
+    
+    # Create temporary registration for test
+    from ..services.connectors import WebhookRegistration
+    
+    test_webhook = WebhookRegistration(
+        webhook_id=f"test-{uuid.uuid4().hex[:8]}",
+        site_id="test",
+        url=url
+    )
+    
+    webhook_publisher.register_webhook(test_webhook)
+    
+    try:
+        delivery_ids = await webhook_publisher.publish(
+            WebhookEventType.RUN_COMPLETED,  # Use a generic event
+            {"message": "Test webhook from MineOpt", "timestamp": datetime.utcnow().isoformat()},
+            "test"
+        )
+        
+        return {
+            "success": True,
+            "delivery_id": delivery_ids[0] if delivery_ids else None,
+            "message": "Test webhook sent"
+        }
+    finally:
+        webhook_publisher.unregister_webhook(test_webhook.webhook_id)
