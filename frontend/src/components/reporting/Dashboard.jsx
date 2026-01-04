@@ -1,26 +1,54 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Play, Zap, Send, FileText, Clock, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 
-const Dashboard = ({ scheduleVersionId }) => {
+const API_BASE = 'http://localhost:8000';
+
+const Dashboard = ({ scheduleVersionId, siteId, versionName, onRefresh }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [actionLoading, setActionLoading] = useState(null); // 'fastpass' | 'fullpass' | 'publish' | 'export'
+    const [shiftTimeRemaining, setShiftTimeRemaining] = useState(null);
+    const [lastRunStatus, setLastRunStatus] = useState(null);
 
     useEffect(() => {
         if (scheduleVersionId) {
             fetchStats();
+            fetchLastRunStatus();
         }
     }, [scheduleVersionId]);
+
+    // Shift countdown timer
+    useEffect(() => {
+        if (stats?.shift_end_time) {
+            const updateCountdown = () => {
+                const now = new Date();
+                const end = new Date(stats.shift_end_time);
+                const diff = end - now;
+                if (diff > 0) {
+                    const hours = Math.floor(diff / (1000 * 60 * 60));
+                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    setShiftTimeRemaining(`${hours}h ${minutes}m remaining`);
+                } else {
+                    setShiftTimeRemaining('Shift ended');
+                }
+            };
+            updateCountdown();
+            const interval = setInterval(updateCountdown, 60000); // Update every minute
+            return () => clearInterval(interval);
+        }
+    }, [stats?.shift_end_time]);
 
     const fetchStats = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`http://localhost:8000/reporting/dashboard/${scheduleVersionId}`);
+            const res = await axios.get(`${API_BASE}/reporting/dashboard/${scheduleVersionId}`);
 
             // Also fetch Cycle Times
             let cycleTimes = [];
             try {
-                const ctRes = await axios.get(`http://localhost:8000/analytics/cycle-times/${scheduleVersionId}`);
+                const ctRes = await axios.get(`${API_BASE}/analytics/cycle-times/${scheduleVersionId}`);
                 cycleTimes = ctRes.data;
             } catch (e) {
                 console.warn("Cycle Times fetch failed");
@@ -37,6 +65,88 @@ const Dashboard = ({ scheduleVersionId }) => {
         }
     };
 
+    const fetchLastRunStatus = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/schedule/versions/${scheduleVersionId}/runs?limit=1`);
+            if (res.data && res.data.length > 0) {
+                setLastRunStatus(res.data[0]);
+            }
+        } catch (e) {
+            // Run history may not be available
+        }
+    };
+
+    // Quick Action Handlers
+    const handleRunFastPass = async () => {
+        setActionLoading('fastpass');
+        try {
+            await axios.post(`${API_BASE}/schedule/run/fast-pass`, {
+                site_id: siteId,
+                schedule_version_id: scheduleVersionId
+            });
+            fetchStats();
+            fetchLastRunStatus();
+            onRefresh?.();
+        } catch (e) {
+            console.error("Fast pass failed", e);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleRunFullPass = async () => {
+        setActionLoading('fullpass');
+        try {
+            await axios.post(`${API_BASE}/schedule/run/full-pass`, {
+                site_id: siteId,
+                schedule_version_id: scheduleVersionId
+            });
+            fetchStats();
+            fetchLastRunStatus();
+            onRefresh?.();
+        } catch (e) {
+            console.error("Full pass failed", e);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handlePublish = async () => {
+        if (!window.confirm("Publish this schedule? It will become read-only.")) return;
+        setActionLoading('publish');
+        try {
+            await axios.put(`${API_BASE}/schedule/versions/${scheduleVersionId}/publish`);
+            fetchStats();
+            onRefresh?.();
+        } catch (e) {
+            console.error("Publish failed", e);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleExportReportPack = async () => {
+        setActionLoading('export');
+        try {
+            const res = await axios.post(`${API_BASE}/reporting/export/pdf/production`, {
+                schedule_version_id: scheduleVersionId
+            }, { responseType: 'blob' });
+
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `schedule_report_${scheduleVersionId.slice(0, 8)}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (e) {
+            console.error("Export failed", e);
+            alert("PDF export failed. Ensure WeasyPrint is installed.");
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     if (loading) {
         return <div className="flex h-full items-center justify-center text-slate-400">Loading Dashboard...</div>;
     }
@@ -47,20 +157,113 @@ const Dashboard = ({ scheduleVersionId }) => {
 
     return (
         <div className="h-full w-full bg-slate-900 p-6 overflow-y-auto">
-            <h2 className="text-2xl font-bold text-white mb-6">Production Overview</h2>
+            {/* Header with Title and Quick Actions */}
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-2xl font-bold text-white">Production Overview</h2>
+                    {versionName && (
+                        <p className="text-sm text-slate-400 mt-1">
+                            Schedule: <span className="text-blue-400">{versionName}</span>
+                        </p>
+                    )}
+                </div>
 
-            {/* Current Period Indicator */}
+                {/* Quick Actions */}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleRunFastPass}
+                        disabled={actionLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                        {actionLoading === 'fastpass' ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                        ) : (
+                            <Zap size={16} />
+                        )}
+                        Fast Pass
+                    </button>
+
+                    <button
+                        onClick={handleRunFullPass}
+                        disabled={actionLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                        {actionLoading === 'fullpass' ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                        ) : (
+                            <Play size={16} />
+                        )}
+                        Full Pass
+                    </button>
+
+                    <button
+                        onClick={handlePublish}
+                        disabled={actionLoading || stats.status === 'Published'}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                        {actionLoading === 'publish' ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                        ) : (
+                            <Send size={16} />
+                        )}
+                        Publish
+                    </button>
+
+                    <button
+                        onClick={handleExportReportPack}
+                        disabled={actionLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                        {actionLoading === 'export' ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                        ) : (
+                            <FileText size={16} />
+                        )}
+                        Export PDF
+                    </button>
+                </div>
+            </div>
+
+            {/* Current Period & Status Bar */}
             <div className="bg-gradient-to-r from-blue-900 to-slate-800 p-4 rounded-lg border border-blue-700 mb-6">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-sm text-blue-300 font-medium">Current Period</p>
-                        <p className="text-xl font-bold text-white">{stats.current_period || 'Day Shift - Week 1'}</p>
+                    <div className="flex items-center gap-8">
+                        <div>
+                            <p className="text-sm text-blue-300 font-medium">Current Period</p>
+                            <p className="text-xl font-bold text-white">{stats.current_period || 'Day Shift - Week 1'}</p>
+                            {shiftTimeRemaining && (
+                                <p className="text-sm text-blue-200 flex items-center gap-1 mt-1">
+                                    <Clock size={14} />
+                                    {shiftTimeRemaining}
+                                </p>
+                            )}
+                        </div>
+
+                        {lastRunStatus && (
+                            <div className="border-l border-blue-700 pl-6">
+                                <p className="text-sm text-slate-400">Last Schedule Run</p>
+                                <p className="text-sm text-white font-medium flex items-center gap-2">
+                                    {lastRunStatus.status === 'Completed' ? (
+                                        <CheckCircle size={14} className="text-green-400" />
+                                    ) : lastRunStatus.status === 'Failed' ? (
+                                        <AlertTriangle size={14} className="text-red-400" />
+                                    ) : (
+                                        <RefreshCw size={14} className="text-yellow-400 animate-spin" />
+                                    )}
+                                    {lastRunStatus.schedule_type} - {lastRunStatus.status}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                    {new Date(lastRunStatus.timestamp).toLocaleString()}
+                                </p>
+                            </div>
+                        )}
                     </div>
+
                     <div className="text-right">
                         <p className="text-sm text-slate-400">Schedule Status</p>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${stats.status === 'Published' ? 'bg-green-900 text-green-300' :
-                                stats.status === 'Running' ? 'bg-yellow-900 text-yellow-300' :
-                                    'bg-slate-700 text-slate-300'
+                            stats.status === 'Running' ? 'bg-yellow-900 text-yellow-300' :
+                                'bg-slate-700 text-slate-300'
                             }`}>
                             {stats.status || 'Draft'}
                         </span>
@@ -155,8 +358,8 @@ const Dashboard = ({ scheduleVersionId }) => {
                             <div key={i} className="flex items-center justify-between p-2 bg-slate-700/50 rounded">
                                 <span className="text-slate-300">{alert.name}</span>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${alert.status === 'high' ? 'bg-amber-900 text-amber-300' :
-                                        alert.status === 'low' ? 'bg-red-900 text-red-300' :
-                                            'bg-green-900 text-green-300'
+                                    alert.status === 'low' ? 'bg-red-900 text-red-300' :
+                                        'bg-green-900 text-green-300'
                                     }`}>
                                     {alert.level}% {alert.status === 'high' ? '↑' : alert.status === 'low' ? '↓' : '✓'}
                                 </span>
