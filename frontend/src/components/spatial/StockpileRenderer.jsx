@@ -29,12 +29,12 @@ const StockpileRenderer = ({ stockpiles = [] }) => {
                 const position = [posData[0], posData[1], posData[2]];
 
                 return (
-                    <group key={pile.node_id || idx} position={position}>
+                    <group key={node.node_id || idx} position={position}>
                         {/* Stockpile Cone */}
                         <mesh
                             position={[0, scale * 2.5, 0]}
                             scale={[scale, scale, scale]}
-                            onPointerOver={() => setHovered(pile)}
+                            onPointerOver={() => setHovered(node)}
                             onPointerOut={() => setHovered(null)}
                         >
                             <coneGeometry args={[5, 5, 32]} />
@@ -54,9 +54,9 @@ const StockpileRenderer = ({ stockpiles = [] }) => {
                         {/* Label */}
                         <Html position={[0, scale * 5 + 5, 0]} center>
                             <div className="bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-xs text-white border border-slate-700 whitespace-nowrap">
-                                <div className="font-bold">{pile.name}</div>
+                                <div className="font-bold">{node.name}</div>
                                 <div>{tons.toLocaleString()} t</div>
-                                {tons > 0 && <div className="text-amber-400">{pile.current_grade.toFixed(2)} MJ/kg</div>}
+                                {tons > 0 && <div className="text-amber-400">{(node.current_grade || 0).toFixed(2)} MJ/kg</div>}
                             </div>
                         </Html>
                     </group>
