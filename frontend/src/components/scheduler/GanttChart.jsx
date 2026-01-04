@@ -94,7 +94,9 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
                 qualityRisk: t.quality_vector?.Ash > 16,
                 rateFactor: t.rate_factor_applied || 1,
                 status: t.status || 'scheduled',
-                taskType: t.task_type
+                taskType: t.task_type,
+                notes: t.notes,
+                delayReasonCode: t.delay_reason_code
             }));
             setTasks(backendTasks);
         } catch (e) {
@@ -434,6 +436,10 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
                     Waste
                     <span className="w-3 h-3 bg-amber-600 rounded-sm mr-1 ml-3"></span>
                     At Risk
+                    <span className="w-3 h-3 bg-purple-600 rounded-sm mr-1 ml-3" style={{
+                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)'
+                    }}></span>
+                    Delay
                 </span>
             </div>
 
@@ -508,32 +514,47 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
                                             {cellTasks.map(task => (
                                                 <div
                                                     key={task.id}
-                                                    draggable
+                                                    draggable={task.taskType !== 'OptimiserDelay'}
                                                     onDragStart={(e) => handleDragStart(e, task.id)}
                                                     onDragEnd={handleDragEnd}
                                                     onClick={() => setSelectedTaskId(task.id)}
                                                     className={clsx(
                                                         "flex-1 min-h-6 rounded text-xs flex items-center justify-center px-2",
-                                                        "font-medium text-white shadow cursor-grab active:cursor-grabbing",
-                                                        "hover:brightness-110 transition-all",
-                                                        task.materialType === 'Coal' && !task.qualityRisk && "bg-gradient-to-r from-blue-600 to-blue-500",
-                                                        task.materialType === 'Coal' && task.qualityRisk && "bg-gradient-to-r from-amber-600 to-amber-500",
-                                                        task.materialType === 'Waste' && "bg-gradient-to-r from-slate-600 to-slate-500",
-                                                        task.taskType === 'OptimiserDelay' && "bg-gradient-to-r from-purple-600 to-purple-500",
+                                                        "font-medium text-white shadow transition-all",
+                                                        task.taskType !== 'OptimiserDelay' && "cursor-grab active:cursor-grabbing hover:brightness-110",
+                                                        task.taskType === 'OptimiserDelay' && "cursor-default",
+                                                        task.materialType === 'Coal' && !task.qualityRisk && task.taskType !== 'OptimiserDelay' && "bg-gradient-to-r from-blue-600 to-blue-500",
+                                                        task.materialType === 'Coal' && task.qualityRisk && task.taskType !== 'OptimiserDelay' && "bg-gradient-to-r from-amber-600 to-amber-500",
+                                                        task.materialType === 'Waste' && task.taskType !== 'OptimiserDelay' && "bg-gradient-to-r from-slate-600 to-slate-500",
+                                                        task.taskType === 'OptimiserDelay' && "bg-purple-600",
                                                         selectedTaskId === task.id && "ring-2 ring-white ring-offset-1 ring-offset-slate-900"
                                                     )}
-                                                    title={`${task.activityName}: ${task.tonnes.toLocaleString()}t${task.rateFactor !== 1 ? ` (${(task.rateFactor * 100).toFixed(0)}%)` : ''}`}
+                                                    style={task.taskType === 'OptimiserDelay' ? {
+                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.2) 3px, rgba(255,255,255,0.2) 6px)'
+                                                    } : undefined}
+                                                    title={task.taskType === 'OptimiserDelay'
+                                                        ? `Optimizer Delay: ${task.notes || 'Rate reduction applied'}`
+                                                        : `${task.activityName}: ${task.tonnes.toLocaleString()}t${task.rateFactor !== 1 ? ` (${(task.rateFactor * 100).toFixed(0)}%)` : ''}`
+                                                    }
                                                 >
-                                                    <span className="truncate">
-                                                        {task.tonnes >= 1000
-                                                            ? `${(task.tonnes / 1000).toFixed(1)}kt`
-                                                            : `${task.tonnes.toFixed(0)}t`
-                                                        }
-                                                    </span>
-                                                    {task.rateFactor !== 1 && (
-                                                        <span className="ml-1 opacity-70">
-                                                            {(task.rateFactor * 100).toFixed(0)}%
+                                                    {task.taskType === 'OptimiserDelay' ? (
+                                                        <span className="truncate text-purple-200 italic">
+                                                            ⚡ Delay
                                                         </span>
+                                                    ) : (
+                                                        <>
+                                                            <span className="truncate">
+                                                                {task.tonnes >= 1000
+                                                                    ? `${(task.tonnes / 1000).toFixed(1)}kt`
+                                                                    : `${task.tonnes.toFixed(0)}t`
+                                                                }
+                                                            </span>
+                                                            {task.rateFactor !== 1 && (
+                                                                <span className="ml-1 opacity-70">
+                                                                    {(task.rateFactor * 100).toFixed(0)}%
+                                                                </span>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             ))}

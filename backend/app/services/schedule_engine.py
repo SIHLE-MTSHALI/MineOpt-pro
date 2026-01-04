@@ -46,7 +46,157 @@ class ScheduleRunConfig:
     max_iterations: int = 5
     target_gap_percent: float = 0.01
     use_lp_solver: bool = True  # Use LP solver for Full Pass (False = greedy)
+    enable_quality_feedback: bool = True  # Enable quality constraint feedback loop
+    min_rate_factor_global: float = 0.5  # Minimum allowed rate factor
+    blend_adjustment_step: float = 0.05  # Rate reduction step per blend violation
+
+
+@dataclass
+class StageTiming:
+    """Tracks timing for each scheduling stage."""
+    stage_name: str
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    duration_ms: Optional[float] = None
     
+    def complete(self):
+        """Mark stage as complete and calculate duration."""
+        self.end_time = datetime.utcnow()
+        self.duration_ms = (self.end_time - self.start_time).total_seconds() * 1000
+
+
+@dataclass
+class QualityFeedbackResult:
+    """Result of quality feedback evaluation."""
+    has_violations: bool
+    violation_count: int
+    suggested_rate_adjustments: Dict[str, float]  # area_id -> new rate factor
+    blend_summary: Dict[str, Dict]  # destination_node_id -> blend quality
+    binding_constraints: List[str]
+
+
+class QualityFeedbackEvaluator:
+    """
+    Evaluates quality constraint compliance and suggests adjustments.
+    
+    This implements the feedback loop between Stage 5 (Routing) and Stage 3 (Assignment)
+    to ensure blend quality targets are met.
+    """
+    
+    def __init__(self, db: Session, blending_service):
+        self.db = db
+        self.blending = blending_service
+    
+    def evaluate_blend_compliance(
+        self,
+        flow_results: List,
+        assignments: List[Dict],
+        quality_targets: Dict[str, Dict]  # node_id -> {field: {min, max, target}}
+    ) -> QualityFeedbackResult:
+        """
+        Evaluate if current blend meets quality targets.
+        Returns suggested rate adjustments if violations found.
+        """
+        violations = []
+        suggested_adjustments = {}
+        blend_summary = {}
+        binding_constraints = []
+        
+        # Group flows by destination node
+        flows_by_dest = {}
+        for flow in flow_results:
+            dest_id = flow.to_node_id
+            if dest_id not in flows_by_dest:
+                flows_by_dest[dest_id] = []
+            flows_by_dest[dest_id].append(flow)
+        
+        # Check each destination's blend quality
+        for dest_id, dest_flows in flows_by_dest.items():
+            targets = quality_targets.get(dest_id, {})
+            if not targets:
+                continue
+            
+            # Calculate blended quality at destination
+            blend = self._calculate_blend_quality(dest_flows)
+            blend_summary[dest_id] = blend
+            
+            # Check each quality field against targets
+            for field, limits in targets.items():
+                value = blend.get(field, 0)
+                
+                if limits.get('min') is not None and value < limits['min']:
+                    violation = f"{field} at {dest_id}: {value:.2f} < min {limits['min']:.2f}"
+                    violations.append(violation)
+                    binding_constraints.append(violation)
+                    # Find sources contributing low quality
+                    self._suggest_rate_reduction(
+                        dest_flows, field, 'increase', suggested_adjustments
+                    )
+                
+                if limits.get('max') is not None and value > limits['max']:
+                    violation = f"{field} at {dest_id}: {value:.2f} > max {limits['max']:.2f}"
+                    violations.append(violation)
+                    binding_constraints.append(violation)
+                    # Find sources contributing high quality
+                    self._suggest_rate_reduction(
+                        dest_flows, field, 'decrease', suggested_adjustments
+                    )
+        
+        return QualityFeedbackResult(
+            has_violations=len(violations) > 0,
+            violation_count=len(violations),
+            suggested_rate_adjustments=suggested_adjustments,
+            blend_summary=blend_summary,
+            binding_constraints=binding_constraints
+        )
+    
+    def _calculate_blend_quality(self, flows: List) -> Dict[str, float]:
+        """Calculate tonnage-weighted average quality from flows."""
+        total_tonnes = 0
+        weighted_quality = {}
+        
+        for flow in flows:
+            qty = flow.quantity or 0
+            quality = flow.quality_vector or {}
+            total_tonnes += qty
+            
+            for field, value in quality.items():
+                if field not in weighted_quality:
+                    weighted_quality[field] = 0
+                weighted_quality[field] += value * qty
+        
+        if total_tonnes > 0:
+            return {f: v / total_tonnes for f, v in weighted_quality.items()}
+        return {}
+    
+    def _suggest_rate_reduction(
+        self,
+        flows: List,
+        quality_field: str,
+        direction: str,  # 'increase' or 'decrease'
+        adjustments: Dict[str, float]
+    ):
+        """Suggest rate reductions to fix quality violations."""
+        # Sort flows by their contribution to the quality issue
+        flow_contributions = []
+        for flow in flows:
+            quality = flow.quality_vector or {}
+            value = quality.get(quality_field, 0)
+            area_ref = flow.source_reference or ''
+            
+            # Extract area_id from reference
+            if 'area:' in area_ref:
+                area_id = area_ref.split('area:')[1].split(':')[0]
+                flow_contributions.append((area_id, value, flow.quantity or 0))
+        
+        # Sort by quality value (ascending for 'decrease', descending for 'increase')
+        flow_contributions.sort(key=lambda x: x[1], reverse=(direction == 'increase'))
+        
+        # Suggest reducing the worst offenders
+        for area_id, value, qty in flow_contributions[:2]:  # Top 2 contributors
+            current = adjustments.get(area_id, 1.0)
+            adjustments[area_id] = max(current - 0.1, 0.5)  # Reduce by 10%
+
 
 @dataclass
 class ScheduleRunResult:
@@ -61,6 +211,11 @@ class ScheduleRunResult:
     total_penalty: float
     diagnostics: List[str]
     explanation_count: int
+    # New fields for enhanced feedback
+    stage_timings: Optional[Dict[str, float]] = None  # stage_name -> duration_ms
+    total_duration_ms: Optional[float] = None
+    quality_violations: int = 0
+    feedback_iterations: int = 0
 
 
 class InputValidator:
@@ -266,6 +421,16 @@ class ScheduleEngine:
     """
     Orchestrates the 8-stage scheduling pipeline.
     Supports FastPass (simplified) and FullPass (complete) modes.
+    
+    Pipeline Stages:
+    1. Input Validation - Check data integrity
+    2. Build Candidate List - Identify work to be scheduled
+    3. Resource Assignment - Allocate resources to tasks
+    4. Material Generation - Create parcels from mining
+    5. Routing & Blending - Determine material flow (LP or greedy)
+    6. Processing Optimization - Wash plant decisions
+    7. Feedback & Adjustment - Quality constraint feedback loop
+    8. Finalize Results - Persist schedule output
     """
     
     def __init__(self, db: Session):
@@ -277,6 +442,19 @@ class ScheduleEngine:
         self.flow_optimizer = FlowOptimizer(db)
         self.lp_allocator = create_lp_allocator(db)  # LP-based optimizer
         self.blending = blending_service
+        self.quality_feedback = QualityFeedbackEvaluator(db, blending_service)
+        self.stage_timings: List[StageTiming] = []
+    
+    def _start_stage(self, stage_name: str) -> StageTiming:
+        """Start timing a stage."""
+        timing = StageTiming(stage_name=stage_name, start_time=datetime.utcnow())
+        self.stage_timings.append(timing)
+        return timing
+    
+    def _get_timing_summary(self) -> Dict[str, float]:
+        """Get summary of stage timings in milliseconds."""
+        return {t.stage_name: t.duration_ms or 0 for t in self.stage_timings}
+    
     
     def run_fast_pass(self, config: ScheduleRunConfig) -> ScheduleRunResult:
         """
