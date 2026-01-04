@@ -371,6 +371,143 @@ class WebSocketManager:
         if schedule_version_id in self.schedule_connections:
             return len(self.schedule_connections[schedule_version_id])
         return 0
+    
+    # =========================================================================
+    # Conflict Resolution (Optimistic Locking)
+    # =========================================================================
+    
+    def __init_entity_versions(self):
+        """Initialize entity version tracking if not already done."""
+        if not hasattr(self, '_entity_versions'):
+            # Map: (entity_type, entity_id) -> {version, user_id, timestamp}
+            self._entity_versions: Dict[Tuple[str, str], Dict] = {}
+    
+    def acquire_edit_lock(
+        self,
+        user_id: str,
+        entity_type: str,
+        entity_id: str,
+        version: int = 0
+    ) -> Dict:
+        """
+        Attempt to acquire an edit lock on an entity.
+        
+        Returns:
+            {"success": True, "lock_version": n} if lock acquired
+            {"success": False, "held_by": user_id, "held_since": timestamp} if already locked
+        """
+        self.__init_entity_versions()
+        key = (entity_type, entity_id)
+        
+        if key in self._entity_versions:
+            existing = self._entity_versions[key]
+            # Check if lock is stale (>5 minutes old)
+            from datetime import timedelta
+            if datetime.utcnow() - existing['timestamp'] > timedelta(minutes=5):
+                # Stale lock, allow takeover
+                pass
+            elif existing['user_id'] != user_id:
+                return {
+                    "success": False,
+                    "held_by": existing['user_id'],
+                    "held_since": existing['timestamp'].isoformat()
+                }
+        
+        self._entity_versions[key] = {
+            'version': version + 1,
+            'user_id': user_id,
+            'timestamp': datetime.utcnow()
+        }
+        
+        return {"success": True, "lock_version": version + 1}
+    
+    def release_edit_lock(
+        self,
+        user_id: str,
+        entity_type: str,
+        entity_id: str
+    ):
+        """Release an edit lock."""
+        self.__init_entity_versions()
+        key = (entity_type, entity_id)
+        
+        if key in self._entity_versions:
+            if self._entity_versions[key]['user_id'] == user_id:
+                del self._entity_versions[key]
+    
+    def check_version_conflict(
+        self,
+        entity_type: str,
+        entity_id: str,
+        client_version: int
+    ) -> Dict:
+        """
+        Check if client's version matches server version.
+        
+        Returns:
+            {"conflict": False} if versions match
+            {"conflict": True, "server_version": n, "message": str} if mismatch
+        """
+        self.__init_entity_versions()
+        key = (entity_type, entity_id)
+        
+        if key not in self._entity_versions:
+            return {"conflict": False}
+        
+        server_version = self._entity_versions[key]['version']
+        
+        if client_version < server_version:
+            return {
+                "conflict": True,
+                "server_version": server_version,
+                "message": f"Entity was modified by another user. Your version: {client_version}, Server version: {server_version}"
+            }
+        
+        return {"conflict": False}
+    
+    async def notify_concurrent_edit(
+        self,
+        schedule_version_id: str,
+        user_id: str,
+        username: str,
+        entity_type: str,
+        entity_id: str
+    ):
+        """Warn other users that someone started editing an entity."""
+        await self.broadcast_to_schedule(
+            schedule_version_id,
+            {
+                "type": "edit_conflict_warning",
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "editing_user_id": user_id,
+                "editing_username": username,
+                "message": f"{username} is editing this {entity_type}",
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            exclude_user_id=user_id
+        )
+    
+    def get_entities_locked_by_user(self, user_id: str) -> List[Dict]:
+        """Get all entities currently locked by a user."""
+        self.__init_entity_versions()
+        
+        return [
+            {"entity_type": k[0], "entity_id": k[1], "version": v['version']}
+            for k, v in self._entity_versions.items()
+            if v['user_id'] == user_id
+        ]
+    
+    def release_all_user_locks(self, user_id: str):
+        """Release all locks held by a user (e.g., on disconnect)."""
+        self.__init_entity_versions()
+        
+        keys_to_remove = [
+            k for k, v in self._entity_versions.items()
+            if v['user_id'] == user_id
+        ]
+        for key in keys_to_remove:
+            del self._entity_versions[key]
 
 
 # Global singleton instance

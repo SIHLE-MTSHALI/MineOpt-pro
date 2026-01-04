@@ -571,13 +571,161 @@ class ReportGeneratorService:
         period_ids: List[str],
         options: Dict
     ) -> GeneratedReport:
-        """Generate planned vs actual reconciliation (placeholder)."""
-        # In real implementation, would compare against actuals table
+        """Generate planned vs actual reconciliation report."""
+        
+        # Get schedule version
+        version = self.db.query(ScheduleVersion).filter(
+            ScheduleVersion.version_id == schedule_version_id
+        ).first()
+        
+        if not version:
+            return self._generate_error_report('planned_vs_actual', 'Schedule version not found')
+        
+        # Get scheduled tasks
+        task_query = self.db.query(ScheduledTask).filter(
+            ScheduledTask.schedule_version_id == schedule_version_id
+        )
+        if period_ids:
+            task_query = task_query.filter(ScheduledTask.period_id.in_(period_ids))
+        tasks = task_query.all()
+        
+        # Get flow results for actuals
+        flow_query = self.db.query(FlowResult).filter(
+            FlowResult.schedule_version_id == schedule_version_id
+        )
+        if period_ids:
+            flow_query = flow_query.filter(FlowResult.period_id.in_(period_ids))
+        flows = flow_query.all()
+        
+        # Aggregate by period
+        planned_by_period = {}
+        actual_by_period = {}
+        
+        for task in tasks:
+            pid = task.period_id
+            if pid not in planned_by_period:
+                planned_by_period[pid] = {'tonnes': 0, 'tasks': 0}
+            planned_by_period[pid]['tonnes'] += task.scheduled_quantity or 0
+            planned_by_period[pid]['tasks'] += 1
+        
+        for flow in flows:
+            pid = flow.period_id
+            if pid not in actual_by_period:
+                actual_by_period[pid] = {'tonnes': 0, 'flows': 0}
+            actual_by_period[pid]['tonnes'] += flow.quantity_tonnes or 0
+            actual_by_period[pid]['flows'] += 1
+        
+        # Build variance table
+        all_periods = sorted(set(list(planned_by_period.keys()) + list(actual_by_period.keys())))
+        
+        variance_data = []
+        total_planned = 0
+        total_actual = 0
+        
+        for period_id in all_periods:
+            planned = planned_by_period.get(period_id, {}).get('tonnes', 0)
+            actual = actual_by_period.get(period_id, {}).get('tonnes', 0)
+            variance = actual - planned
+            variance_pct = (variance / planned * 100) if planned > 0 else 0
+            
+            variance_data.append({
+                'period_id': period_id,
+                'planned_tonnes': round(planned, 1),
+                'actual_tonnes': round(actual, 1),
+                'variance_tonnes': round(variance, 1),
+                'variance_percent': round(variance_pct, 1),
+                'status': 'on_target' if abs(variance_pct) < 5 else ('over' if variance > 0 else 'under')
+            })
+            
+            total_planned += planned
+            total_actual += actual
+        
+        # Summary statistics
+        total_variance = total_actual - total_planned
+        total_variance_pct = (total_variance / total_planned * 100) if total_planned > 0 else 0
+        
+        # Build chart data for waterfall visualization
+        waterfall_data = []
+        running_total = total_planned
+        waterfall_data.append({'label': 'Planned', 'value': total_planned, 'type': 'total'})
+        
+        for row in variance_data:
+            waterfall_data.append({
+                'label': row['period_id'],
+                'value': row['variance_tonnes'],
+                'type': 'increase' if row['variance_tonnes'] > 0 else 'decrease'
+            })
+        
+        waterfall_data.append({'label': 'Actual', 'value': total_actual, 'type': 'total'})
+        
+        # Build sections
+        sections = [
+            ReportSection(
+                section_id='summary',
+                title='Variance Summary',
+                content_type='summary',
+                data={
+                    'total_planned': round(total_planned, 1),
+                    'total_actual': round(total_actual, 1),
+                    'total_variance': round(total_variance, 1),
+                    'variance_percent': round(total_variance_pct, 1),
+                    'periods_analyzed': len(all_periods),
+                    'on_target_periods': len([v for v in variance_data if v['status'] == 'on_target']),
+                    'over_periods': len([v for v in variance_data if v['status'] == 'over']),
+                    'under_periods': len([v for v in variance_data if v['status'] == 'under'])
+                }
+            ),
+            ReportSection(
+                section_id='variance_table',
+                title='Period Variance Details',
+                content_type='table',
+                data={
+                    'columns': ['Period', 'Planned (t)', 'Actual (t)', 'Variance (t)', 'Variance %', 'Status'],
+                    'rows': [
+                        [
+                            v['period_id'],
+                            v['planned_tonnes'],
+                            v['actual_tonnes'],
+                            v['variance_tonnes'],
+                            f"{v['variance_percent']:+.1f}%",
+                            v['status']
+                        ]
+                        for v in variance_data
+                    ]
+                }
+            ),
+            ReportSection(
+                section_id='waterfall_chart',
+                title='Variance Waterfall',
+                content_type='chart',
+                data={
+                    'chart_type': 'waterfall',
+                    'data': waterfall_data
+                }
+            ),
+            ReportSection(
+                section_id='bar_chart',
+                title='Planned vs Actual by Period',
+                content_type='chart',
+                data={
+                    'chart_type': 'grouped_bar',
+                    'categories': [v['period_id'] for v in variance_data],
+                    'series': [
+                        {'name': 'Planned', 'data': [v['planned_tonnes'] for v in variance_data]},
+                        {'name': 'Actual', 'data': [v['actual_tonnes'] for v in variance_data]}
+                    ]
+                }
+            )
+        ]
+        
         return GeneratedReport(
-            metadata=self._create_metadata('planned_vs_actual', 'Planned vs Actual', schedule_version_id),
-            sections=[ReportSection('placeholder', 'Planned vs Actual', 'summary', 
-                                     {'note': 'Actuals integration required for this report'})],
-            summary={'status': 'pending_actuals'}
+            metadata=self._create_metadata('planned_vs_actual', 'Planned vs Actual Reconciliation', schedule_version_id),
+            sections=sections,
+            summary={
+                'total_planned': round(total_planned, 1),
+                'total_actual': round(total_actual, 1),
+                'variance_percent': round(total_variance_pct, 1)
+            }
         )
     
     # -------------------------------------------------------------------------
