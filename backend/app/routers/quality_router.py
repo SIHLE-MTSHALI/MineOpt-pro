@@ -331,3 +331,146 @@ def get_basis_types():
             {"name": "DAF", "description": "Dry Ash Free (moisture and ash-free)"}
         ]
     }
+
+
+# =============================================================================
+# Monte Carlo Simulation Endpoints
+# =============================================================================
+
+class SimulationSource(BaseModel):
+    """Source for simulation."""
+    parcel_id: str
+    source_reference: str = ""
+    quantity_tonnes: float
+    quality_vector: Dict[str, float]
+    uncertainty_factors: Optional[Dict[str, float]] = None  # field -> relative std dev
+
+
+class SimulationSpec(BaseModel):
+    """Quality specification for compliance check."""
+    field_name: str
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    is_hard_constraint: bool = True
+
+
+class SimulationRequest(BaseModel):
+    """Request body for Monte Carlo simulation."""
+    sources: List[SimulationSource]
+    specs: Optional[List[SimulationSpec]] = None
+    n_simulations: int = 1000
+    include_wash_plant: bool = False
+    wash_plant_yield: float = 0.85
+    wash_plant_yield_std: float = 0.02
+    random_seed: Optional[int] = None
+
+
+@router.post("/simulate")
+def run_quality_simulation(request: SimulationRequest):
+    """
+    Run Monte Carlo simulation for quality uncertainty.
+    
+    Returns:
+    - Quality statistics (mean, std, percentiles)
+    - Probability of meeting specs
+    - Confidence intervals
+    - Sensitivity analysis (which sources drive variance)
+    """
+    from ..services.quality_simulator import (
+        QualitySimulator, ParcelQualityModel, 
+        QualityDistribution, QualitySpec
+    )
+    
+    # Build parcel models
+    parcels = []
+    for source in request.sources:
+        distributions = {}
+        uncertainty = source.uncertainty_factors or {
+            'CV': 0.03, 'Ash': 0.08, 'Moisture': 0.10, 'Sulphur': 0.05
+        }
+        
+        for field, value in source.quality_vector.items():
+            if isinstance(value, (int, float)):
+                rel_std = uncertainty.get(field, 0.05)
+                distributions[field] = QualityDistribution(
+                    field_name=field,
+                    mean=float(value),
+                    std_dev=float(value) * rel_std,
+                    distribution_type="normal"
+                )
+        
+        parcels.append(ParcelQualityModel(
+            parcel_id=source.parcel_id,
+            source_reference=source.source_reference,
+            quantity_tonnes=source.quantity_tonnes,
+            quality_distributions=distributions
+        ))
+    
+    # Build specs
+    specs = None
+    if request.specs:
+        specs = [
+            QualitySpec(
+                field_name=s.field_name,
+                min_value=s.min_value,
+                max_value=s.max_value,
+                is_hard_constraint=s.is_hard_constraint
+            )
+            for s in request.specs
+        ]
+    
+    # Create simulator and run
+    simulator = QualitySimulator(
+        n_simulations=request.n_simulations,
+        random_seed=request.random_seed
+    )
+    
+    if request.include_wash_plant:
+        result = simulator.simulate_with_wash_plant(
+            parcels, 
+            yield_mean=request.wash_plant_yield,
+            yield_std=request.wash_plant_yield_std,
+            specs=specs
+        )
+    else:
+        result = simulator.simulate_blend(parcels, specs)
+    
+    return result.to_dict()
+
+
+@router.post("/simulate/quick")
+def run_quick_simulation(request: BlendRequest, n_simulations: int = 500):
+    """
+    Quick simulation using existing blend request format.
+    Uses default uncertainty factors.
+    """
+    from ..services.quality_simulator import (
+        QualitySimulator, ParcelQualityModel, QualityDistribution
+    )
+    
+    parcels = []
+    for i, source in enumerate(request.sources):
+        quality = source.get('quality_vector', {})
+        qty = source.get('quantity_tonnes', 0)
+        
+        distributions = {}
+        for field, value in quality.items():
+            if isinstance(value, (int, float)):
+                distributions[field] = QualityDistribution(
+                    field_name=field,
+                    mean=float(value),
+                    std_dev=float(value) * 0.05,
+                    distribution_type="normal"
+                )
+        
+        parcels.append(ParcelQualityModel(
+            parcel_id=f"source_{i}",
+            source_reference="",
+            quantity_tonnes=qty,
+            quality_distributions=distributions
+        ))
+    
+    simulator = QualitySimulator(n_simulations=n_simulations)
+    result = simulator.simulate_blend(parcels)
+    
+    return result.to_dict()
