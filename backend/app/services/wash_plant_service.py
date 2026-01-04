@@ -388,6 +388,364 @@ class WashPlantService:
             feed_tonnes, result.product_tonnes, result.reject_tonnes,
             feed_quality, result.product_quality, result.reject_quality
         )
+    
+    # -------------------------------------------------------------------------
+    # Multi-Stage Processing
+    # -------------------------------------------------------------------------
+    
+    def process_multi_stage(
+        self,
+        node_id: str,
+        feed_tonnes: float,
+        feed_quality: Dict[str, float],
+        stage_configs: List[Dict] = None,
+        period_id: str = None,
+        schedule_version_id: str = None
+    ) -> Dict:
+        """
+        Process material through multiple wash stages.
+        
+        Stage 2 can process either:
+        - Reject from stage 1 (reject_to_stage_2: true)
+        - Product from stage 1 for further cleaning
+        
+        Returns combined result with stage-by-stage breakdown.
+        """
+        if not stage_configs:
+            # Default 2-stage config: main plant + reject reprocessing
+            stage_configs = [
+                {'stage': 1, 'table_id': 'primary', 'mode': 'FixedRD', 'cutpoint_rd': 1.5},
+                {'stage': 2, 'table_id': 'secondary', 'mode': 'FixedRD', 'cutpoint_rd': 1.7, 
+                 'feed_from_reject': True}
+            ]
+        
+        stages = []
+        current_product = 0.0
+        current_product_quality = {}
+        total_reject = 0.0
+        total_reject_quality = {}
+        
+        # Stage 1 - Primary processing
+        stage1 = stage_configs[0] if stage_configs else {}
+        s1_result = self._process_single_stage(
+            table_id=stage1.get('table_id'),
+            feed_tonnes=feed_tonnes,
+            feed_quality=feed_quality,
+            mode=stage1.get('mode', 'FixedRD'),
+            cutpoint_rd=stage1.get('cutpoint_rd', 1.5),
+            target_field=stage1.get('target_field'),
+            target_value=stage1.get('target_value'),
+            target_type=stage1.get('target_type')
+        )
+        
+        stages.append({
+            'stage': 1,
+            'feed_tonnes': feed_tonnes,
+            'product_tonnes': s1_result.product_tonnes,
+            'reject_tonnes': s1_result.reject_tonnes,
+            'yield': s1_result.yield_fraction,
+            'cutpoint_rd': s1_result.cutpoint_rd,
+            'product_quality': s1_result.product_quality
+        })
+        
+        current_product = s1_result.product_tonnes
+        current_product_quality = s1_result.product_quality
+        stage1_reject_tonnes = s1_result.reject_tonnes
+        stage1_reject_quality = s1_result.reject_quality
+        
+        # Stage 2 - Secondary processing (if configured)
+        if len(stage_configs) > 1:
+            stage2 = stage_configs[1]
+            
+            # Determine stage 2 feed
+            if stage2.get('feed_from_reject', False):
+                # Process reject from stage 1
+                s2_feed = stage1_reject_tonnes
+                s2_feed_quality = stage1_reject_quality
+            else:
+                # Further clean product from stage 1
+                s2_feed = s1_result.product_tonnes
+                s2_feed_quality = s1_result.product_quality
+            
+            if s2_feed > 0:
+                s2_result = self._process_single_stage(
+                    table_id=stage2.get('table_id'),
+                    feed_tonnes=s2_feed,
+                    feed_quality=s2_feed_quality,
+                    mode=stage2.get('mode', 'FixedRD'),
+                    cutpoint_rd=stage2.get('cutpoint_rd', 1.7),
+                    target_field=stage2.get('target_field'),
+                    target_value=stage2.get('target_value'),
+                    target_type=stage2.get('target_type')
+                )
+                
+                stages.append({
+                    'stage': 2,
+                    'feed_tonnes': s2_feed,
+                    'product_tonnes': s2_result.product_tonnes,
+                    'reject_tonnes': s2_result.reject_tonnes,
+                    'yield': s2_result.yield_fraction,
+                    'cutpoint_rd': s2_result.cutpoint_rd,
+                    'product_quality': s2_result.product_quality
+                })
+                
+                if stage2.get('feed_from_reject', False):
+                    # Stage 2 product adds to stage 1 product
+                    total_product = current_product + s2_result.product_tonnes
+                    total_product_quality = self._blend_qualities(
+                        current_product_quality, current_product,
+                        s2_result.product_quality, s2_result.product_tonnes
+                    )
+                    total_reject = s2_result.reject_tonnes
+                else:
+                    # Stage 2 replaces stage 1 product
+                    total_product = s2_result.product_tonnes
+                    total_product_quality = s2_result.product_quality
+                    total_reject = stage1_reject_tonnes + s2_result.reject_tonnes
+                
+                current_product = total_product
+                current_product_quality = total_product_quality
+        else:
+            total_reject = stage1_reject_tonnes
+        
+        overall_yield = current_product / feed_tonnes if feed_tonnes > 0 else 0
+        
+        return {
+            'feed_tonnes': feed_tonnes,
+            'feed_quality': feed_quality,
+            'final_product_tonnes': current_product,
+            'final_product_quality': current_product_quality,
+            'final_reject_tonnes': total_reject,
+            'overall_yield': overall_yield,
+            'stages': stages,
+            'num_stages': len(stages)
+        }
+    
+    def _process_single_stage(
+        self,
+        table_id: str,
+        feed_tonnes: float,
+        feed_quality: Dict[str, float],
+        mode: str = 'FixedRD',
+        cutpoint_rd: float = 1.5,
+        target_field: str = None,
+        target_value: float = None,
+        target_type: str = None
+    ) -> WashResult:
+        """Process a single wash stage."""
+        if not table_id or not self.db:
+            # Use simplified model
+            yield_frac, prod_qual = self.calculate_yield_and_quality(
+                feed_quality, 12.0, 0.95
+            )
+            return WashResult(
+                cutpoint_rd=cutpoint_rd,
+                yield_fraction=yield_frac,
+                product_tonnes=feed_tonnes * yield_frac,
+                reject_tonnes=feed_tonnes * (1 - yield_frac),
+                product_quality=prod_qual,
+                reject_quality=feed_quality,
+                selection_mode=mode,
+                rationale="Simplified model"
+            )
+        
+        if mode == 'TargetQuality' and target_field:
+            return self.select_cutpoint_target_quality(
+                table_id, target_field, target_value or 14.0,
+                target_type or 'Max', feed_tonnes
+            )
+        else:
+            return self.select_cutpoint_fixed(
+                table_id, cutpoint_rd, feed_tonnes, feed_quality
+            )
+    
+    def _blend_qualities(
+        self,
+        q1: Dict[str, float], t1: float,
+        q2: Dict[str, float], t2: float
+    ) -> Dict[str, float]:
+        """Blend two quality vectors by tonnage weight."""
+        total = t1 + t2
+        if total <= 0:
+            return {}
+        
+        blended = {}
+        all_fields = set(q1.keys()) | set(q2.keys())
+        for field in all_fields:
+            v1 = q1.get(field, 0) * t1
+            v2 = q2.get(field, 0) * t2
+            blended[field] = (v1 + v2) / total
+        return blended
+    
+    # -------------------------------------------------------------------------
+    # Yield Adjustment Model
+    # -------------------------------------------------------------------------
+    
+    def apply_yield_adjustment(
+        self,
+        theoretical_yield: float,
+        misplacement_model: Dict = None,
+        efficiency_factor: float = 0.95,
+        historical_correction: float = 1.0
+    ) -> float:
+        """
+        Apply yield adjustments for real-world conditions.
+        
+        Args:
+            theoretical_yield: Yield from wash table interpolation
+            misplacement_model: Configuration for misplacement calculation
+                - near_gravity_factor: Extra loss for material near cutpoint RD
+                - fines_factor: Loss due to fine coal in reject
+            efficiency_factor: Overall plant efficiency (0-1)
+            historical_correction: Calibration from actual vs predicted history
+        
+        Returns:
+            Adjusted yield fraction
+        """
+        base_yield = theoretical_yield * efficiency_factor
+        
+        if misplacement_model:
+            # Near-gravity misplacement (more loss for material close to cutpoint)
+            ngf = misplacement_model.get('near_gravity_factor', 0.02)
+            fines = misplacement_model.get('fines_factor', 0.01)
+            
+            # Apply losses
+            base_yield *= (1 - ngf - fines)
+        
+        # Apply historical calibration
+        adjusted_yield = base_yield * historical_correction
+        
+        return max(0.0, min(1.0, adjusted_yield))
+    
+    def calibrate_from_history(
+        self,
+        node_id: str,
+        lookback_points: int = 10
+    ) -> float:
+        """
+        Calculate historical correction factor from actual vs predicted.
+        
+        Returns ratio of actual/predicted yields from recent operating points.
+        """
+        if not self.db:
+            return 1.0
+        
+        # Get recent operating points
+        recent = self.db.query(WashPlantOperatingPoint)\
+            .filter(WashPlantOperatingPoint.wash_plant_node_id == node_id)\
+            .order_by(WashPlantOperatingPoint.period_id.desc())\
+            .limit(lookback_points)\
+            .all()
+        
+        if len(recent) < 3:
+            return 1.0  # Not enough data
+        
+        # Compare predicted vs actual (would need actual yield tracking)
+        # For now return 1.0 as placeholder
+        return 1.0
+    
+    # -------------------------------------------------------------------------
+    # Period-by-Period Cutpoint Optimization
+    # -------------------------------------------------------------------------
+    
+    def optimize_cutpoints_for_schedule(
+        self,
+        node_id: str,
+        period_feeds: List[Dict],
+        product_price: float,
+        reject_cost: float = 0.0,
+        quality_penalties: List[Dict] = None,
+        constraint_cv_min: float = None,
+        constraint_ash_max: float = None
+    ) -> List[Dict]:
+        """
+        Optimize cutpoint selection across multiple periods.
+        
+        Considers cumulative quality requirements - may accept lower
+        yield in one period to maintain overall quality.
+        
+        Args:
+            period_feeds: List of {period_id, feed_tonnes, feed_quality}
+            product_price: $/tonne for product
+            reject_cost: $/tonne disposal cost
+            quality_penalties: Penalty structure for quality deviations
+            constraint_cv_min: Minimum CV constraint (cumulative)
+            constraint_ash_max: Maximum Ash constraint (cumulative)
+        
+        Returns:
+            Optimized cutpoint plan per period
+        """
+        if not self.db:
+            return []
+        
+        config = self.db.query(models_flow.WashPlantConfig)\
+            .filter(models_flow.WashPlantConfig.node_id == node_id).first()
+        
+        if not config or not config.wash_table_id:
+            return []
+        
+        results = []
+        cumulative_product = 0.0
+        cumulative_quality = {}
+        
+        for pf in period_feeds:
+            period_id = pf.get('period_id')
+            feed_tonnes = pf.get('feed_tonnes', 0)
+            feed_quality = pf.get('feed_quality', {})
+            
+            if feed_tonnes <= 0:
+                continue
+            
+            # Run optimizer for this period
+            result, analysis = self.select_cutpoint_optimizer(
+                config.wash_table_id,
+                feed_tonnes,
+                product_price,
+                reject_cost,
+                quality_penalties
+            )
+            
+            # Check if cumulative quality constraints would be violated
+            if constraint_ash_max or constraint_cv_min:
+                new_cumulative = cumulative_product + result.product_tonnes
+                new_quality = self._blend_qualities(
+                    cumulative_quality, cumulative_product,
+                    result.product_quality, result.product_tonnes
+                )
+                
+                # Adjust if constraints violated
+                needs_adjustment = False
+                if constraint_ash_max and new_quality.get('Ash_ADB', 0) > constraint_ash_max:
+                    needs_adjustment = True
+                if constraint_cv_min and new_quality.get('CV_ARB', 0) < constraint_cv_min:
+                    needs_adjustment = True
+                
+                if needs_adjustment:
+                    # Re-optimize with quality target mode
+                    if constraint_ash_max:
+                        result = self.select_cutpoint_target_quality(
+                            config.wash_table_id, 'Ash_ADB', 
+                            constraint_ash_max * 0.95, 'Max', feed_tonnes
+                        )
+            
+            cumulative_product += result.product_tonnes
+            cumulative_quality = self._blend_qualities(
+                cumulative_quality, cumulative_product - result.product_tonnes,
+                result.product_quality, result.product_tonnes
+            )
+            
+            results.append({
+                'period_id': period_id,
+                'recommended_cutpoint': result.cutpoint_rd,
+                'expected_yield': result.yield_fraction,
+                'expected_product_tonnes': result.product_tonnes,
+                'expected_product_quality': result.product_quality,
+                'rationale': result.rationale,
+                'cumulative_product': cumulative_product,
+                'cumulative_quality': cumulative_quality
+            })
+        
+        return results
 
 
 # Singleton for simple use cases

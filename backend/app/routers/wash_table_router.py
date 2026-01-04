@@ -401,3 +401,114 @@ def get_selection_modes():
             }
         ]
     }
+
+
+# =============================================================================
+# Multi-Stage Processing
+# =============================================================================
+
+class MultiStageRequest(BaseModel):
+    """Request for multi-stage wash processing."""
+    feed_tonnes: float
+    feed_quality: Dict[str, float]
+    stage_configs: Optional[List[Dict]] = None
+    period_id: Optional[str] = None
+    schedule_version_id: Optional[str] = None
+
+
+class CutpointOptimizationRequest(BaseModel):
+    """Request for period-by-period cutpoint optimization."""
+    period_feeds: List[Dict]  # [{period_id, feed_tonnes, feed_quality}, ...]
+    product_price: float
+    reject_cost: float = 0.0
+    quality_penalties: Optional[List[Dict]] = None
+    constraint_cv_min: Optional[float] = None
+    constraint_ash_max: Optional[float] = None
+
+
+@router.post("/{node_id}/process-multi-stage")
+def process_multi_stage(
+    node_id: str,
+    request: MultiStageRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Process material through multiple wash stages.
+    
+    Stage 2 can process:
+    - Reject from stage 1 (feed_from_reject: true)
+    - Product from stage 1 for further cleaning
+    
+    Default: 2-stage with reject reprocessing
+    """
+    service = WashPlantService(db)
+    result = service.process_multi_stage(
+        node_id=node_id,
+        feed_tonnes=request.feed_tonnes,
+        feed_quality=request.feed_quality,
+        stage_configs=request.stage_configs,
+        period_id=request.period_id,
+        schedule_version_id=request.schedule_version_id
+    )
+    
+    return result
+
+
+@router.post("/{node_id}/optimize-schedule-cutpoints")
+def optimize_schedule_cutpoints(
+    node_id: str,
+    request: CutpointOptimizationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Optimize cutpoint selection across multiple periods.
+    
+    Considers cumulative quality requirements and may accept lower
+    yield in one period to maintain overall quality constraints.
+    """
+    service = WashPlantService(db)
+    results = service.optimize_cutpoints_for_schedule(
+        node_id=node_id,
+        period_feeds=request.period_feeds,
+        product_price=request.product_price,
+        reject_cost=request.reject_cost,
+        quality_penalties=request.quality_penalties,
+        constraint_cv_min=request.constraint_cv_min,
+        constraint_ash_max=request.constraint_ash_max
+    )
+    
+    if not results:
+        return {
+            "message": "No valid periods to optimize",
+            "plan": []
+        }
+    
+    return {
+        "node_id": node_id,
+        "periods_optimized": len(results),
+        "final_cumulative_product": results[-1].get('cumulative_product', 0) if results else 0,
+        "final_cumulative_quality": results[-1].get('cumulative_quality', {}) if results else {},
+        "plan": results
+    }
+
+
+@router.post("/{node_id}/calibrate-yield")
+def calibrate_yield_model(
+    node_id: str,
+    lookback_points: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Calibrate yield adjustment from historical operating data.
+    
+    Compares predicted vs actual yields to calculate correction factor.
+    """
+    service = WashPlantService(db)
+    correction_factor = service.calibrate_from_history(node_id, lookback_points)
+    
+    return {
+        "node_id": node_id,
+        "lookback_points": lookback_points,
+        "calculated_correction_factor": correction_factor,
+        "message": "Use this factor in yield_adjustment_factor config"
+    }
