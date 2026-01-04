@@ -20,7 +20,8 @@ from .routers import (
     staged_stockpile_router,
     wash_table_router,
     security_router,
-    cp_solver_router
+    cp_solver_router,
+    flow_router
 )
 from .database import engine, Base
 
@@ -86,6 +87,7 @@ app.include_router(staged_stockpile_router.router)
 app.include_router(wash_table_router.router)
 app.include_router(security_router.router)
 app.include_router(cp_solver_router.router)
+app.include_router(flow_router.router)
 
 
 @app.get("/")

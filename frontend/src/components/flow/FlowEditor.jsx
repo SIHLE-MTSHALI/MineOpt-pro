@@ -263,6 +263,125 @@ const PropertiesPanel = ({ selectedNode, selectedArc, nodes, arcs, onUpdateNode,
                             <option value="Waste">Waste Only</option>
                         </select>
                     </div>
+
+                    {/* Quality Objectives Section */}
+                    <div className="border-t border-slate-700 pt-3 mt-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-xs text-slate-400 font-medium">Quality Objectives</label>
+                            <button
+                                onClick={() => {
+                                    const objectives = arc.qualityObjectives || [];
+                                    onUpdateArc(arc.id, {
+                                        qualityObjectives: [...objectives, {
+                                            id: `obj-${Date.now()}`,
+                                            field: 'CV',
+                                            min: null,
+                                            max: null,
+                                            target: null,
+                                            softness: 'Medium'
+                                        }]
+                                    });
+                                }}
+                                className="text-xs text-blue-400 hover:text-blue-300"
+                            >
+                                + Add
+                            </button>
+                        </div>
+
+                        {(arc.qualityObjectives || []).map((obj, idx) => (
+                            <div key={obj.id} className="bg-slate-800 rounded p-2 mb-2 text-xs">
+                                <div className="flex justify-between items-center mb-2">
+                                    <select
+                                        value={obj.field}
+                                        onChange={(e) => {
+                                            const updated = [...arc.qualityObjectives];
+                                            updated[idx].field = e.target.value;
+                                            onUpdateArc(arc.id, { qualityObjectives: updated });
+                                        }}
+                                        className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-white"
+                                    >
+                                        <option value="CV">CV (MJ/kg)</option>
+                                        <option value="Ash">Ash (%)</option>
+                                        <option value="Moisture">Moisture (%)</option>
+                                        <option value="Sulphur">Sulphur (%)</option>
+                                        <option value="Volatile">Volatile (%)</option>
+                                    </select>
+                                    <button
+                                        onClick={() => {
+                                            const updated = arc.qualityObjectives.filter((_, i) => i !== idx);
+                                            onUpdateArc(arc.id, { qualityObjectives: updated });
+                                        }}
+                                        className="text-red-400 hover:text-red-300 p-1"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1">
+                                    <div>
+                                        <label className="text-slate-500">Min</label>
+                                        <input
+                                            type="number"
+                                            value={obj.min ?? ''}
+                                            onChange={(e) => {
+                                                const updated = [...arc.qualityObjectives];
+                                                updated[idx].min = e.target.value ? parseFloat(e.target.value) : null;
+                                                onUpdateArc(arc.id, { qualityObjectives: updated });
+                                            }}
+                                            className="w-full bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-white"
+                                            placeholder="-"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-500">Target</label>
+                                        <input
+                                            type="number"
+                                            value={obj.target ?? ''}
+                                            onChange={(e) => {
+                                                const updated = [...arc.qualityObjectives];
+                                                updated[idx].target = e.target.value ? parseFloat(e.target.value) : null;
+                                                onUpdateArc(arc.id, { qualityObjectives: updated });
+                                            }}
+                                            className="w-full bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-white"
+                                            placeholder="-"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-500">Max</label>
+                                        <input
+                                            type="number"
+                                            value={obj.max ?? ''}
+                                            onChange={(e) => {
+                                                const updated = [...arc.qualityObjectives];
+                                                updated[idx].max = e.target.value ? parseFloat(e.target.value) : null;
+                                                onUpdateArc(arc.id, { qualityObjectives: updated });
+                                            }}
+                                            className="w-full bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-white"
+                                            placeholder="-"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-1">
+                                    <select
+                                        value={obj.softness}
+                                        onChange={(e) => {
+                                            const updated = [...arc.qualityObjectives];
+                                            updated[idx].softness = e.target.value;
+                                            onUpdateArc(arc.id, { qualityObjectives: updated });
+                                        }}
+                                        className="w-full bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-white"
+                                    >
+                                        <option value="Hard">Hard (must meet)</option>
+                                        <option value="Medium">Medium (penalty)</option>
+                                        <option value="Soft">Soft (prefer)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        ))}
+
+                        {(!arc.qualityObjectives || arc.qualityObjectives.length === 0) && (
+                            <div className="text-slate-500 text-xs italic">No quality objectives defined</div>
+                        )}
+                    </div>
                 </div>
             </div>
         );
