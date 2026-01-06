@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const LoginPage = ({ onLogin }) => {
-    const [isLogin, setIsLogin] = useState(true);
+const LoginPage = ({ onLogin, defaultMode = 'login' }) => {
+    const navigate = useNavigate();
+    const [isLogin, setIsLogin] = useState(defaultMode === 'login');
 
     // Login State
     const [username, setUsername] = useState('');
@@ -203,6 +205,12 @@ const LoginPage = ({ onLogin }) => {
                     </div>
 
                     <div className="mt-6 text-center text-xs text-slate-600">
+                        <button
+                            onClick={() => navigate('/')}
+                            className="text-slate-500 hover:text-slate-300 transition-colors mb-2 block mx-auto"
+                        >
+                            ← Back to Home
+                        </button>
                         v2.1.0-E
                     </div>
                 </div>

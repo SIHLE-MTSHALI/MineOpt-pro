@@ -124,3 +124,60 @@ def delete_task(task_id: str, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return {"message": "Task deleted"}
+
+
+@router.get("/versions/{version_id}/diagnostics")
+def get_diagnostics(version_id: str, db: Session = Depends(get_db)):
+    """
+    Get diagnostics for a schedule version including:
+    - Feasibility analysis
+    - Binding constraints
+    - Decision explanations
+    """
+    version = db.query(models_scheduling.ScheduleVersion).filter(
+        models_scheduling.ScheduleVersion.version_id == version_id
+    ).first()
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Schedule version not found")
+    
+    tasks = db.query(models_scheduling.Task).filter(
+        models_scheduling.Task.schedule_version_id == version_id
+    ).all()
+    
+    # Calculate summary metrics
+    total_tasks = len(tasks)
+    total_tonnes = sum(t.planned_quantity or 0 for t in tasks)
+    
+    # Check for decision explanations stored with the version
+    explanations = db.query(models_scheduling.DecisionExplanation).filter(
+        models_scheduling.DecisionExplanation.schedule_version_id == version_id
+    ).all() if hasattr(models_scheduling, 'DecisionExplanation') else []
+    
+    # Build diagnostics response
+    diagnostics = {
+        "summary": {
+            "status": version.status,
+            "totalTasks": total_tasks,
+            "totalTonnes": total_tonnes,
+            "feasibilityScore": 1.0 if total_tasks > 0 else 0.0,
+            "qualityCompliance": 0.95  # Placeholder - would come from quality analysis
+        },
+        "infeasibilities": [],  # Would be populated from optimization run
+        "blockedRoutes": [],
+        "unmetDemands": [],
+        "bindingConstraints": [],
+        "decisions": [
+            {
+                "id": exp.explanation_id if hasattr(exp, 'explanation_id') else str(i),
+                "decisionType": exp.decision_type if hasattr(exp, 'decision_type') else "Unknown",
+                "explanation": exp.explanation_text if hasattr(exp, 'explanation_text') else "",
+                "bindingConstraints": exp.binding_constraints if hasattr(exp, 'binding_constraints') else [],
+                "penaltyBreakdown": exp.penalty_breakdown if hasattr(exp, 'penalty_breakdown') else [],
+                "alternativesConsidered": exp.alternatives_considered if hasattr(exp, 'alternatives_considered') else []
+            }
+            for i, exp in enumerate(explanations)
+        ]
+    }
+    
+    return diagnostics

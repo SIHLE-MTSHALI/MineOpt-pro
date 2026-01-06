@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import GanttTaskBar, { MaintenanceOverlay, GanttFilters } from './GanttTaskBar';
+import GanttContextMenu from './GanttContextMenu';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -39,6 +40,7 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
     const [saving, setSaving] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [maintenanceWindows, setMaintenanceWindows] = useState([]);
+    const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, task: null });
 
     const gridRef = useRef(null);
 
@@ -241,6 +243,123 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
             onTaskUpdate?.();
         } catch (error) {
             console.error("Failed to delete task", error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Handle right-click context menu
+     */
+    const handleContextMenu = (e, task) => {
+        e.preventDefault();
+        setContextMenu({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            task
+        });
+    };
+
+    /**
+     * Close context menu
+     */
+    const closeContextMenu = () => {
+        setContextMenu({ visible: false, x: 0, y: 0, task: null });
+    };
+
+    /**
+     * Handle task split
+     */
+    const handleSplitTask = async (taskId, splitConfig) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        try {
+            setSaving(true);
+
+            // Update the original task with reduced tonnes
+            const updatedOriginal = {
+                ...task,
+                tonnes: splitConfig.firstPartTonnes
+            };
+
+            // Create a new task for the second part
+            const newTaskResponse = await axios.post(`${API_BASE}/schedule/tasks`, {
+                schedule_version_id: scheduleVersionId,
+                resource_id: task.resourceId,
+                period_id: splitConfig.targetPeriodId,
+                activity_id: task.activityId,
+                activity_area_id: task.activityAreaId,
+                planned_quantity: splitConfig.secondPartTonnes,
+                material_type_id: task.materialType,
+                task_type: task.taskType,
+                notes: `Split from task ${taskId}`
+            });
+
+            // Update original task
+            await axios.put(`${API_BASE}/schedule/tasks/${taskId}`, {
+                planned_quantity: splitConfig.firstPartTonnes
+            });
+
+            // Update local state
+            const newTask = {
+                ...task,
+                id: newTaskResponse.data.task_id || `split-${Date.now()}`,
+                periodId: splitConfig.targetPeriodId,
+                tonnes: splitConfig.secondPartTonnes
+            };
+
+            setTasks(prev => [
+                ...prev.map(t => t.id === taskId ? updatedOriginal : t),
+                newTask
+            ]);
+
+            // Add to undo history
+            setEditHistory(prev => [...prev, {
+                type: 'split',
+                originalTaskId: taskId,
+                newTaskId: newTask.id,
+                originalTonnes: task.tonnes
+            }]);
+
+            onTaskUpdate?.();
+        } catch (error) {
+            console.error("Failed to split task", error);
+            fetchTasks();
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Handle resource change from context menu
+     */
+    const handleChangeResource = async (taskId, newResourceId) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task || task.resourceId === newResourceId) return;
+
+        // Save to undo history
+        setEditHistory(prev => [...prev, {
+            type: 'move', taskId,
+            oldResourceId: task.resourceId, oldPeriodId: task.periodId,
+            newResourceId: newResourceId, newPeriodId: task.periodId
+        }]);
+
+        // Optimistic update
+        setTasks(tasks.map(t =>
+            t.id === taskId ? { ...t, resourceId: newResourceId } : t
+        ));
+
+        try {
+            setSaving(true);
+            await axios.put(`${API_BASE}/schedule/tasks/${taskId}`, {
+                resource_id: newResourceId
+            });
+            onTaskUpdate?.();
+        } catch (error) {
+            console.error("Failed to change resource", error);
+            fetchTasks();
         } finally {
             setSaving(false);
         }
@@ -518,6 +637,7 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
                                                     onDragStart={(e) => handleDragStart(e, task.id)}
                                                     onDragEnd={handleDragEnd}
                                                     onClick={() => setSelectedTaskId(task.id)}
+                                                    onContextMenu={(e) => handleContextMenu(e, task)}
                                                     className={clsx(
                                                         "flex-1 min-h-6 rounded text-xs flex items-center justify-center px-2",
                                                         "font-medium text-white shadow transition-all",
@@ -626,6 +746,29 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
                     })()}
                 </div>
             )}
+
+            {/* Context Menu */}
+            <GanttContextMenu
+                visible={contextMenu.visible}
+                x={contextMenu.x}
+                y={contextMenu.y}
+                task={contextMenu.task}
+                resources={resources}
+                periods={periods}
+                onClose={closeContextMenu}
+                onEditTask={(task) => setSelectedTaskId(task.id)}
+                onSplitTask={handleSplitTask}
+                onChangeResource={handleChangeResource}
+                onDeleteTask={handleDeleteTask}
+                onViewExplanation={(task) => {
+                    console.log("View explanation for task:", task.id);
+                    // TODO: Open decision explanation modal
+                }}
+                onDuplicateTask={(task) => {
+                    console.log("Duplicate task:", task.id);
+                    // TODO: Implement duplicate
+                }}
+            />
         </div>
     );
 };
