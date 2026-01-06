@@ -25,7 +25,8 @@ from .routers import (
     websocket_router,
     reports_router,
     file_format_router,
-    borehole_router
+    borehole_router,
+    block_model_router
 )
 from .database import engine, Base
 
@@ -104,6 +105,7 @@ app.include_router(reports_router.router)
 app.include_router(reports_router.products_router)
 app.include_router(file_format_router.router)
 app.include_router(borehole_router.router)
+app.include_router(block_model_router.router)
 
 
 @app.get("/")
