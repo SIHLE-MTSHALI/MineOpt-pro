@@ -22,7 +22,8 @@ from .routers import (
     security_router,
     cp_solver_router,
     flow_router,
-    websocket_router
+    websocket_router,
+    reports_router
 )
 from .database import engine, Base
 
@@ -90,6 +91,8 @@ app.include_router(security_router.router)
 app.include_router(cp_solver_router.router)
 app.include_router(flow_router.router)
 app.include_router(websocket_router.router)
+app.include_router(reports_router.router)
+app.include_router(reports_router.products_router)
 
 
 @app.get("/")

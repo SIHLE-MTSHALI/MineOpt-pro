@@ -120,6 +120,53 @@ class WebhookRequest(BaseModel):
     webhook_url: Optional[str] = None
 
 
+class ExternalIdMapping(BaseModel):
+    id: Optional[str] = None
+    entity_type: str  # parcel, resource, location, product
+    external_id: str
+    internal_id: str
+    description: Optional[str] = None
+    validated: bool = False
+
+
+class BIExtractConfig(BaseModel):
+    id: Optional[str] = None
+    name: str
+    entity_type: str  # schedules, production, quality, stockpiles, equipment
+    schedule_cron: Optional[str] = None
+    output_format: str = "json"
+    destination: str
+    enabled: bool = True
+    filters: Optional[Dict] = None
+
+
+class LabImportWithDelay(BaseModel):
+    sample_date: datetime
+    samples: List[Dict]
+    delay_hours: int = 24
+
+
+# In-memory stores for demo
+_mappings_store: List[Dict] = [
+    {"id": "1", "entity_type": "parcel", "external_id": "PIT-A-15", "internal_id": "parcel-abc123", "description": "Block A15", "validated": True},
+    {"id": "2", "entity_type": "parcel", "external_id": "PIT-B-22", "internal_id": "parcel-def456", "description": "Block B22", "validated": True},
+    {"id": "3", "entity_type": "resource", "external_id": "EXC-001", "internal_id": "res-001", "description": "Excavator 1", "validated": True},
+]
+
+_bi_extracts_store: List[Dict] = [
+    {"id": "1", "name": "Daily Production Summary", "entity_type": "production", "schedule_cron": "0 6 * * *", "output_format": "json", "destination": "/exports/production_daily.json", "enabled": True},
+    {"id": "2", "name": "Weekly Quality Report", "entity_type": "quality", "schedule_cron": "0 6 * * 1", "output_format": "csv", "destination": "/exports/quality_weekly.csv", "enabled": True},
+]
+
+_mapping_id_counter = 100
+
+
+def _get_next_mapping_id():
+    global _mapping_id_counter
+    _mapping_id_counter += 1
+    return str(_mapping_id_counter)
+
+
 # =============================================================================
 # Legacy Survey/Lab Endpoints
 # =============================================================================
@@ -631,3 +678,205 @@ async def test_webhook(url: str, event_type: str = "test.ping"):
         }
     finally:
         webhook_publisher.unregister_webhook(test_webhook.webhook_id)
+
+
+# =============================================================================
+# External ID Mapping Endpoints
+# =============================================================================
+
+@router.get("/mappings", response_model=List[Dict])
+def list_mappings(entity_type: Optional[str] = None):
+    """List all external ID mappings, optionally filtered by entity type."""
+    if entity_type:
+        return [m for m in _mappings_store if m["entity_type"] == entity_type]
+    return _mappings_store
+
+
+@router.get("/mappings/{mapping_id}")
+def get_mapping(mapping_id: str):
+    """Get a specific mapping by ID."""
+    for m in _mappings_store:
+        if m["id"] == mapping_id:
+            return m
+    raise HTTPException(status_code=404, detail="Mapping not found")
+
+
+@router.post("/mappings", response_model=Dict)
+def create_mapping(mapping: ExternalIdMapping):
+    """Create a new external ID mapping."""
+    new_mapping = mapping.model_dump()
+    new_mapping["id"] = _get_next_mapping_id()
+    new_mapping["created_at"] = datetime.utcnow().isoformat()
+    _mappings_store.append(new_mapping)
+    return new_mapping
+
+
+@router.put("/mappings/{mapping_id}", response_model=Dict)
+def update_mapping(mapping_id: str, mapping: ExternalIdMapping):
+    """Update an existing mapping."""
+    for i, m in enumerate(_mappings_store):
+        if m["id"] == mapping_id:
+            updated = mapping.model_dump()
+            updated["id"] = mapping_id
+            updated["updated_at"] = datetime.utcnow().isoformat()
+            _mappings_store[i] = updated
+            return updated
+    raise HTTPException(status_code=404, detail="Mapping not found")
+
+
+@router.delete("/mappings/{mapping_id}")
+def delete_mapping(mapping_id: str):
+    """Delete a mapping."""
+    global _mappings_store
+    initial_len = len(_mappings_store)
+    _mappings_store = [m for m in _mappings_store if m["id"] != mapping_id]
+    if len(_mappings_store) == initial_len:
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    return {"status": "deleted"}
+
+
+@router.post("/mappings/import")
+def import_mappings_csv(
+    file: UploadFile = File(...),
+    entity_type: str = "parcel"
+):
+    """Import mappings from a CSV file."""
+    content = file.file.read()
+    df = pd.read_csv(io.BytesIO(content))
+    
+    imported_count = 0
+    for _, row in df.iterrows():
+        new_mapping = {
+            "id": _get_next_mapping_id(),
+            "entity_type": entity_type,
+            "external_id": row.get("external_id", ""),
+            "internal_id": row.get("internal_id", ""),
+            "description": row.get("description", ""),
+            "validated": False,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        _mappings_store.append(new_mapping)
+        imported_count += 1
+    
+    return {"imported": imported_count}
+
+
+@router.get("/mappings/resolve/{external_id}")
+def resolve_mapping(external_id: str, entity_type: Optional[str] = None):
+    """Resolve an external ID to its internal ID."""
+    for m in _mappings_store:
+        if m["external_id"] == external_id:
+            if entity_type is None or m["entity_type"] == entity_type:
+                return {"internal_id": m["internal_id"], "entity_type": m["entity_type"]}
+    raise HTTPException(status_code=404, detail="Mapping not found")
+
+
+# =============================================================================
+# BI Extract Publishing Endpoints
+# =============================================================================
+
+@router.get("/bi-extracts", response_model=List[Dict])
+def list_bi_extracts():
+    """List all configured BI extracts."""
+    return _bi_extracts_store
+
+
+@router.post("/bi-extracts", response_model=Dict)
+def create_bi_extract(config: BIExtractConfig):
+    """Create a new BI extract configuration."""
+    new_config = config.model_dump()
+    new_config["id"] = _get_next_mapping_id()
+    new_config["created_at"] = datetime.utcnow().isoformat()
+    _bi_extracts_store.append(new_config)
+    return new_config
+
+
+@router.post("/bi-extracts/{extract_id}/run")
+def run_bi_extract(extract_id: str):
+    """Manually trigger a BI extract to run now."""
+    for config in _bi_extracts_store:
+        if config["id"] == extract_id:
+            # Simulate extract generation
+            import random
+            result = {
+                "extract_id": extract_id,
+                "status": "completed",
+                "rows_exported": random.randint(50, 500),
+                "output_path": config["destination"],
+                "format": config["output_format"],
+                "completed_at": datetime.utcnow().isoformat()
+            }
+            return result
+    raise HTTPException(status_code=404, detail="BI extract config not found")
+
+
+@router.patch("/bi-extracts/{extract_id}")
+def update_bi_extract(extract_id: str, updates: Dict):
+    """Partially update a BI extract configuration."""
+    for i, config in enumerate(_bi_extracts_store):
+        if config["id"] == extract_id:
+            _bi_extracts_store[i].update(updates)
+            _bi_extracts_store[i]["updated_at"] = datetime.utcnow().isoformat()
+            return _bi_extracts_store[i]
+    raise HTTPException(status_code=404, detail="BI extract config not found")
+
+
+@router.delete("/bi-extracts/{extract_id}")
+def delete_bi_extract(extract_id: str):
+    """Delete a BI extract configuration."""
+    global _bi_extracts_store
+    initial_len = len(_bi_extracts_store)
+    _bi_extracts_store = [c for c in _bi_extracts_store if c["id"] != extract_id]
+    if len(_bi_extracts_store) == initial_len:
+        raise HTTPException(status_code=404, detail="BI extract config not found")
+    return {"status": "deleted"}
+
+
+# =============================================================================
+# Lab Results Import with Delay
+# =============================================================================
+
+@router.post("/lab-results/import-delayed")
+def import_lab_results_delayed(request: LabImportWithDelay):
+    """
+    Import lab results with simulated delay.
+    Lab results are typically delayed by 24-48 hours in real operations.
+    """
+    from datetime import timedelta
+    
+    available_at = request.sample_date + timedelta(hours=request.delay_hours)
+    
+    processed = []
+    for sample in request.samples:
+        # Attempt to resolve external ID
+        parcel_id = None
+        external_id = sample.get("parcel_external_id")
+        if external_id:
+            for m in _mappings_store:
+                if m["external_id"] == external_id and m["entity_type"] == "parcel":
+                    parcel_id = m["internal_id"]
+                    break
+        
+        processed.append({
+            "sample_id": sample.get("sample_id"),
+            "parcel_id": parcel_id,
+            "parcel_external_id": external_id,
+            "quality_data": sample.get("quality_data", {}),
+            "available_at": available_at.isoformat(),
+            "status": "pending" if datetime.utcnow() < available_at else "available"
+        })
+    
+    return {
+        "samples_processed": len(processed),
+        "results_available_at": available_at.isoformat(),
+        "samples": processed
+    }
+
+
+@router.get("/lab-results/pending")
+def get_pending_lab_results():
+    """Get lab results that are still pending (within delay window)."""
+    return {
+        "pending_count": 0,
+        "samples": []
+    }
