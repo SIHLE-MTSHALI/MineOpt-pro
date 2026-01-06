@@ -23,7 +23,9 @@ from .routers import (
     cp_solver_router,
     flow_router,
     websocket_router,
-    reports_router
+    reports_router,
+    file_format_router,
+    borehole_router
 )
 from .database import engine, Base
 
@@ -48,6 +50,13 @@ from .domain.models_scheduling import ScheduleVersion, Task
 from .domain.models_schedule_results import (
     ScheduleRunRequest, FlowResult, InventoryBalance, 
     DecisionExplanation, ObjectiveProfile
+)
+from .domain.models_borehole import (
+    BoreholeCollar, BoreholeSurvey, BoreholeInterval,
+    BoreholeAssay, Borehole3DTrace
+)
+from .domain.models_block_model import (
+    BlockModelDefinition, Block, BlockModelRun
 )
 
 
@@ -93,6 +102,8 @@ app.include_router(flow_router.router)
 app.include_router(websocket_router.router)
 app.include_router(reports_router.router)
 app.include_router(reports_router.products_router)
+app.include_router(file_format_router.router)
+app.include_router(borehole_router.router)
 
 
 @app.get("/")

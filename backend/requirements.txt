@@ -22,3 +22,9 @@ httpx>=0.24.0
 
 # PDF Generation
 weasyprint>=60.0
+
+# CAD File Support
+ezdxf>=1.0.0
+
+# Geostatistics
+pykrige>=1.7.0
