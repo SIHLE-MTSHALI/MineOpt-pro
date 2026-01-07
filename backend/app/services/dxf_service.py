@@ -691,6 +691,270 @@ class DXFService:
             return None
         else:
             return self.export_to_bytes(doc)
+    
+    # =========================================================================
+    # TIN SURFACE EXPORT FUNCTIONS
+    # =========================================================================
+    
+    def export_tin_surface(
+        self, 
+        vertices: List[Tuple[float, float, float]],
+        triangles: List[Tuple[int, int, int]],
+        layer_name: str = "SURFACE_TIN",
+        color: int = 3,
+        file_path: Optional[str] = None,
+        config: Optional[DXFExportConfig] = None
+    ) -> Optional[bytes]:
+        """
+        Export a TIN (Triangulated Irregular Network) surface to DXF.
+        
+        Args:
+            vertices: List of (x, y, z) vertex coordinates
+            triangles: List of (i, j, k) vertex indices for each triangle
+            layer_name: Layer name for the surface
+            color: AutoCAD color index
+            file_path: Path to save file (if None, returns bytes)
+            config: Export configuration
+            
+        Returns:
+            Bytes if file_path is None, otherwise None
+        """
+        config = config or DXFExportConfig()
+        doc = self.create_new_document(config.version)
+        
+        # Create layer for surface
+        self.add_layer(doc, layer_name, color=color)
+        
+        # Add each triangle as a 3DFACE
+        for tri in triangles:
+            if len(tri) >= 3:
+                try:
+                    v0 = vertices[tri[0]]
+                    v1 = vertices[tri[1]]
+                    v2 = vertices[tri[2]]
+                    
+                    face_vertices = [
+                        DXFPoint(x=v0[0], y=v0[1], z=v0[2]),
+                        DXFPoint(x=v1[0], y=v1[1], z=v1[2]),
+                        DXFPoint(x=v2[0], y=v2[1], z=v2[2])
+                    ]
+                    
+                    self.add_3dface(doc, face_vertices, layer=layer_name)
+                except IndexError:
+                    continue  # Skip invalid triangles
+        
+        if file_path:
+            self.save_document(doc, file_path)
+            return None
+        else:
+            return self.export_to_bytes(doc)
+    
+    def export_contours(
+        self,
+        contours: List[Dict],
+        file_path: Optional[str] = None,
+        major_interval: float = 10.0,
+        config: Optional[DXFExportConfig] = None
+    ) -> Optional[bytes]:
+        """
+        Export contour lines to DXF.
+        
+        Args:
+            contours: List of contour dicts with 'elevation' and 'points' keys
+                      points: List of (x, y, z) tuples
+            file_path: Path to save file
+            major_interval: Elevation interval for major contours (thicker lines)
+            config: Export configuration
+            
+        Returns:
+            Bytes if file_path is None, otherwise None
+        """
+        config = config or DXFExportConfig()
+        doc = self.create_new_document(config.version)
+        
+        # Create layers for contours
+        self.add_layer(doc, "CONTOUR_MAJOR", color=7)   # White - major contours
+        self.add_layer(doc, "CONTOUR_MINOR", color=8)   # Gray - minor contours
+        self.add_layer(doc, "CONTOUR_LABELS", color=7)  # White - elevation labels
+        
+        msp = doc.modelspace()
+        
+        for contour in contours:
+            elevation = contour.get("elevation", 0)
+            pts = contour.get("points", [])
+            
+            if len(pts) < 2:
+                continue
+            
+            # Determine if major or minor contour
+            is_major = abs(elevation % major_interval) < 0.01
+            layer = "CONTOUR_MAJOR" if is_major else "CONTOUR_MINOR"
+            
+            # Convert to DXFPoints
+            points = [DXFPoint(x=p[0], y=p[1], z=p[2] if len(p) > 2 else elevation) 
+                      for p in pts]
+            
+            # Check if closed
+            closed = len(pts) > 3 and pts[0] == pts[-1]
+            
+            # Add polyline
+            self.add_polyline(doc, points, layer=layer, closed=closed)
+            
+            # Add elevation label at midpoint for major contours
+            if is_major and len(pts) > 1:
+                mid_idx = len(pts) // 2
+                mid_pt = pts[mid_idx]
+                label_pos = DXFPoint(x=mid_pt[0], y=mid_pt[1], 
+                                     z=mid_pt[2] if len(mid_pt) > 2 else elevation)
+                self.add_text(doc, f"{elevation:.0f}", label_pos, 
+                             height=2.0, layer="CONTOUR_LABELS")
+        
+        if file_path:
+            self.save_document(doc, file_path)
+            return None
+        else:
+            return self.export_to_bytes(doc)
+    
+    def export_strings(
+        self,
+        strings: List[Dict],
+        file_path: Optional[str] = None,
+        config: Optional[DXFExportConfig] = None
+    ) -> Optional[bytes]:
+        """
+        Export CAD strings/polylines to DXF.
+        
+        Args:
+            strings: List of string dicts with:
+                - 'name': String name/ID
+                - 'points': List of (x, y, z) tuples
+                - 'closed': Optional, whether string is closed
+                - 'layer': Optional, layer name
+                - 'color': Optional, color index
+                - 'string_type': Optional, type like 'boundary', 'road', 'design'
+            file_path: Path to save file
+            config: Export configuration
+            
+        Returns:
+            Bytes if file_path is None, otherwise None
+        """
+        config = config or DXFExportConfig()
+        doc = self.create_new_document(config.version)
+        
+        # Default layer colors by string type
+        type_colors = {
+            "boundary": 1,    # Red
+            "road": 4,        # Cyan
+            "design": 3,      # Green
+            "ramp": 5,        # Blue
+            "dump": 6,        # Magenta
+            "contour": 7,     # White
+            "default": 7
+        }
+        
+        # Group strings by layer
+        layer_strings: Dict[str, List] = {}
+        for s in strings:
+            layer = s.get("layer", s.get("string_type", "STRINGS"))
+            if layer not in layer_strings:
+                layer_strings[layer] = []
+            layer_strings[layer].append(s)
+        
+        # Create layers and add strings
+        for layer_name, layer_strs in layer_strings.items():
+            # Determine color
+            string_type = layer_strs[0].get("string_type", "default")
+            color = layer_strs[0].get("color", type_colors.get(string_type, 7))
+            
+            # Add layer
+            self.add_layer(doc, layer_name.upper(), color=color)
+            
+            for s in layer_strs:
+                pts = s.get("points", [])
+                if len(pts) < 2:
+                    continue
+                
+                points = [DXFPoint(x=p[0], y=p[1], z=p[2] if len(p) > 2 else 0) 
+                          for p in pts]
+                closed = s.get("closed", False)
+                
+                self.add_polyline(doc, points, layer=layer_name.upper(), closed=closed)
+        
+        if file_path:
+            self.save_document(doc, file_path)
+            return None
+        else:
+            return self.export_to_bytes(doc)
+    
+    def export_surfaces_multi(
+        self,
+        surfaces: List[Dict],
+        file_path: Optional[str] = None,
+        config: Optional[DXFExportConfig] = None
+    ) -> Optional[bytes]:
+        """
+        Export multiple TIN surfaces to a single DXF file.
+        
+        Args:
+            surfaces: List of surface dicts with:
+                - 'name': Surface name (used as layer)
+                - 'vertices': List of (x, y, z) tuples
+                - 'triangles': List of (i, j, k) vertex indices
+                - 'color': Optional AutoCAD color index
+                - 'surface_type': Optional type like 'terrain', 'seam_roof', etc.
+            file_path: Path to save file
+            config: Export configuration
+            
+        Returns:
+            Bytes if file_path is None, otherwise None
+        """
+        config = config or DXFExportConfig()
+        doc = self.create_new_document(config.version)
+        
+        # Default colors by surface type
+        type_colors = {
+            "terrain": 8,       # Gray
+            "seam_roof": 3,     # Green
+            "seam_floor": 1,    # Red
+            "pit_design": 5,    # Blue
+            "dump_design": 6,   # Magenta
+            "ramp_design": 4,   # Cyan
+            "default": 7
+        }
+        
+        for surf in surfaces:
+            name = surf.get("name", "Surface")
+            vertices = surf.get("vertices", [])
+            triangles = surf.get("triangles", [])
+            surface_type = surf.get("surface_type", "default")
+            color = surf.get("color", type_colors.get(surface_type, 7))
+            
+            layer_name = f"SURFACE_{name.upper().replace(' ', '_')}"
+            self.add_layer(doc, layer_name, color=color)
+            
+            # Add triangles
+            for tri in triangles:
+                if len(tri) >= 3:
+                    try:
+                        v0 = vertices[tri[0]]
+                        v1 = vertices[tri[1]]
+                        v2 = vertices[tri[2]]
+                        
+                        face_vertices = [
+                            DXFPoint(x=v0[0], y=v0[1], z=v0[2]),
+                            DXFPoint(x=v1[0], y=v1[1], z=v1[2]),
+                            DXFPoint(x=v2[0], y=v2[1], z=v2[2])
+                        ]
+                        
+                        self.add_3dface(doc, face_vertices, layer=layer_name)
+                    except (IndexError, TypeError):
+                        continue
+        
+        if file_path:
+            self.save_document(doc, file_path)
+            return None
+        else:
+            return self.export_to_bytes(doc)
 
 
 # Singleton instance

@@ -73,6 +73,14 @@ from .models_schedule_results import (
     ObjectiveProfile
 )
 
+# Surface and CAD entities
+from .models_surface import (
+    Surface,
+    SurfaceProperty,
+    CADString,
+    CADAnnotation
+)
+
 # Export all models for easy import
 __all__ = [
     # Core
@@ -96,4 +104,6 @@ __all__ = [
     # Schedule Results
     'ScheduleRunRequest', 'FlowResult', 'InventoryBalance', 
     'DecisionExplanation', 'ObjectiveProfile',
+    # Surface and CAD
+    'Surface', 'SurfaceProperty', 'CADString', 'CADAnnotation',
 ]

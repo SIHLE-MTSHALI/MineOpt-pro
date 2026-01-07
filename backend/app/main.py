@@ -26,7 +26,8 @@ from .routers import (
     reports_router,
     file_format_router,
     borehole_router,
-    block_model_router
+    block_model_router,
+    surface_router
 )
 from .database import engine, Base
 
@@ -58,6 +59,9 @@ from .domain.models_borehole import (
 )
 from .domain.models_block_model import (
     BlockModelDefinition, Block, BlockModelRun
+)
+from .domain.models_surface import (
+    Surface, SurfaceProperty, CADString, CADAnnotation
 )
 
 
@@ -106,6 +110,7 @@ app.include_router(reports_router.products_router)
 app.include_router(file_format_router.router)
 app.include_router(borehole_router.router)
 app.include_router(block_model_router.router)
+app.include_router(surface_router.router)
 
 
 @app.get("/")
