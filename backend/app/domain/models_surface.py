@@ -27,6 +27,34 @@ class SurfaceType(str, Enum):
     CUSTOM = "custom"                # User-defined
 
 
+class StringType(str, Enum):
+    """Types of CAD strings for mining applications."""
+    # Design strings
+    PIT_BOUNDARY = "pit_boundary"           # Open pit limits/outline
+    BENCH_CREST = "bench_crest"             # Top edge of bench
+    BENCH_TOE = "bench_toe"                 # Bottom edge of bench
+    HAUL_ROAD = "haul_road"                 # Road centerlines
+    RAMP = "ramp"                           # Pit access ramps
+    
+    # Survey/Control strings
+    CONTOUR = "contour"                     # Elevation contours
+    DRILL_PATTERN = "drill_pattern"         # Blast hole layout
+    SURVEY_TRAVERSE = "survey_traverse"     # Survey control points
+    
+    # Infrastructure strings
+    POWER_LINE = "power_line"               # Electrical infrastructure
+    WATER_LINE = "water_line"               # Water management
+    FENCE_LINE = "fence_line"               # Security/safety boundaries
+    
+    # Geological strings
+    GEOLOGICAL_CONTACT = "geological_contact"  # Lithology boundaries
+    FAULT = "fault"                         # Geological fault lines
+    
+    # Administrative strings
+    BOUNDARY = "boundary"                   # Lease/permit limits
+    CUSTOM = "custom"                       # User-defined
+
+
 class Surface(Base):
     """
     A TIN (Triangulated Irregular Network) surface.

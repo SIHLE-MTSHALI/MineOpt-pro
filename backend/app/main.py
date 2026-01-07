@@ -27,7 +27,12 @@ from .routers import (
     file_format_router,
     borehole_router,
     block_model_router,
-    surface_router
+    surface_router,
+    crs_router,
+    cad_string_router,
+    surface_tools_router,
+    annotation_router,
+    raster_router
 )
 from .database import engine, Base
 
@@ -111,6 +116,11 @@ app.include_router(file_format_router.router)
 app.include_router(borehole_router.router)
 app.include_router(block_model_router.router)
 app.include_router(surface_router.router)
+app.include_router(crs_router.router)
+app.include_router(cad_string_router.router)
+app.include_router(surface_tools_router.router)
+app.include_router(annotation_router.router)
+app.include_router(raster_router.router)
 
 
 @app.get("/")

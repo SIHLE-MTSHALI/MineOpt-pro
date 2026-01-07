@@ -39,6 +39,11 @@ class Site(Base):
     unit_system = Column(String, default="Metric")
     default_quality_basis_preferences = Column(JSON) # e.g. {"CV": "ARB"}
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Coordinate Reference System fields
+    crs_epsg = Column(Integer, nullable=True)  # EPSG code (e.g., 2048 for SA Lo27)
+    crs_wkt = Column(String, nullable=True)    # Well-Known Text representation
+    crs_name = Column(String, nullable=True)   # Human-readable name
 
     # Relationships
     material_types = relationship("MaterialType", back_populates="site")
