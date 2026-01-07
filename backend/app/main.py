@@ -32,7 +32,12 @@ from .routers import (
     cad_string_router,
     surface_tools_router,
     annotation_router,
-    raster_router
+    raster_router,
+    # New feature routers
+    fleet_router,
+    drill_blast_router,
+    operations_router,
+    monitoring_router
 )
 from .database import engine, Base
 
@@ -67,6 +72,25 @@ from .domain.models_block_model import (
 )
 from .domain.models_surface import (
     Surface, SurfaceProperty, CADString, CADAnnotation
+)
+
+# Import new feature domain models
+from .domain.models_fleet import (
+    Equipment, GPSReading, Geofence, GeofenceViolation,
+    HaulCycle, MaintenanceRecord, ComponentLife
+)
+from .domain.models_drill_blast import (
+    BlastPattern, DrillHole, BlastEvent, FragmentationModel
+)
+from .domain.models_material_shift import (
+    LoadTicket, MaterialMovementSummary, Shift, ShiftHandover, 
+    ShiftIncident, ReconciliationPeriod
+)
+from .domain.models_geotech_safety import (
+    GeotechDomain, SlopeMonitoringPrism, PrismReading,
+    MonitoringBore, WaterLevelReading, DustMonitor, DustReading,
+    RehabilitationArea, HazardZone, HazardZoneEntry,
+    FatigueEvent, OperatorFatigueScore
 )
 
 
@@ -121,6 +145,12 @@ app.include_router(cad_string_router.router)
 app.include_router(surface_tools_router.router)
 app.include_router(annotation_router.router)
 app.include_router(raster_router.router)
+
+# New feature routers
+app.include_router(fleet_router.router)
+app.include_router(drill_blast_router.router)
+app.include_router(operations_router.router)
+app.include_router(monitoring_router.router)
 
 
 @app.get("/")
