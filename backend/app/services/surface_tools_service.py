@@ -896,6 +896,606 @@ class SurfaceToolsService:
         )
     
     # =========================================================================
+    # BOOLEAN OPERATIONS
+    # =========================================================================
+    
+    def boolean_difference(
+        self,
+        surface_a: TINSurface,
+        surface_b: TINSurface,
+        name: Optional[str] = None
+    ) -> TINSurface:
+        """
+        Boolean difference: A - B (cut B from A).
+        
+        Returns surface A with areas covered by B removed.
+        
+        Args:
+            surface_a: Base surface
+            surface_b: Surface to subtract
+            name: Name for result surface
+            
+        Returns:
+            New TINSurface with difference
+        """
+        if not SHAPELY_AVAILABLE:
+            raise ImportError("shapely required for boolean operations")
+        
+        # Get boundary of surface_b
+        b_boundary = self._get_surface_boundary(surface_b)
+        
+        if b_boundary is None:
+            return surface_a
+        
+        b_polygon = Polygon(b_boundary)
+        
+        # Filter vertices from A that are NOT inside B
+        outside_indices = []
+        for i, v in enumerate(surface_a.vertices):
+            pt = Point(v.x, v.y)
+            if not b_polygon.contains(pt):
+                outside_indices.append(i)
+        
+        if not outside_indices:
+            raise ValueError("Surface A completely covered by B")
+        
+        # Build vertex mapping
+        old_to_new = {old: new for new, old in enumerate(outside_indices)}
+        new_vertices = [surface_a.vertices[i] for i in outside_indices]
+        
+        # Filter triangles
+        new_triangles = []
+        for tri in surface_a.triangles:
+            if all(idx in old_to_new for idx in [tri.i, tri.j, tri.k]):
+                new_triangles.append(Triangle(
+                    i=old_to_new[tri.i],
+                    j=old_to_new[tri.j],
+                    k=old_to_new[tri.k]
+                ))
+        
+        if not new_triangles and len(new_vertices) >= 3:
+            points = [(v.x, v.y, v.z) for v in new_vertices]
+            return self._base_service.create_tin_from_points(
+                points,
+                name=name or f"{surface_a.name}_diff",
+                surface_type=surface_a.surface_type
+            )
+        
+        return TINSurface(
+            name=name or f"{surface_a.name}_diff",
+            vertices=new_vertices,
+            triangles=new_triangles,
+            surface_type=surface_a.surface_type,
+            seam_name=surface_a.seam_name
+        )
+    
+    def boolean_intersection(
+        self,
+        surface_a: TINSurface,
+        surface_b: TINSurface,
+        name: Optional[str] = None
+    ) -> TINSurface:
+        """
+        Boolean intersection: A ∩ B.
+        
+        Returns areas where both surfaces overlap.
+        
+        Args:
+            surface_a: First surface
+            surface_b: Second surface
+            name: Name for result
+            
+        Returns:
+            New TINSurface with intersection
+        """
+        if not SHAPELY_AVAILABLE:
+            raise ImportError("shapely required for boolean operations")
+        
+        b_boundary = self._get_surface_boundary(surface_b)
+        if b_boundary is None:
+            raise ValueError("Cannot determine surface B boundary")
+        
+        return self.clip_to_boundary(surface_a, b_boundary, name)
+    
+    def _get_surface_boundary(
+        self,
+        surface: TINSurface
+    ) -> Optional[List[Tuple[float, float]]]:
+        """Extract convex hull boundary of a surface."""
+        if not SHAPELY_AVAILABLE or len(surface.vertices) < 3:
+            return None
+        
+        points = [(v.x, v.y) for v in surface.vertices]
+        mp = MultiPoint(points)
+        hull = mp.convex_hull
+        
+        if hasattr(hull, 'exterior'):
+            return list(hull.exterior.coords[:-1])  # Exclude closing point
+        return None
+    
+    def extend_surface_edges(
+        self,
+        surface: TINSurface,
+        distance: float,
+        direction: str = "all"
+    ) -> TINSurface:
+        """
+        Extend surface edges outward.
+        
+        Args:
+            surface: Surface to extend
+            distance: Extension distance
+            direction: "all", "north", "south", "east", "west"
+            
+        Returns:
+            Extended TINSurface
+        """
+        min_pt, max_pt = surface.get_extent()
+        
+        # Calculate new extent based on direction
+        new_min_x = min_pt.x - distance if direction in ["all", "west"] else min_pt.x
+        new_max_x = max_pt.x + distance if direction in ["all", "east"] else max_pt.x
+        new_min_y = min_pt.y - distance if direction in ["all", "south"] else min_pt.y
+        new_max_y = max_pt.y + distance if direction in ["all", "north"] else max_pt.y
+        
+        # Sample edge elevations and extrapolate
+        all_points = [(v.x, v.y, v.z) for v in surface.vertices]
+        
+        # Add edge points
+        edge_spacing = distance
+        
+        # West edge
+        if direction in ["all", "west"]:
+            for y in self._range_float(min_pt.y, max_pt.y, edge_spacing):
+                z = self._base_service.query_elevation(surface, min_pt.x, y)
+                if z is not None:
+                    all_points.append((new_min_x, y, z))
+        
+        # East edge
+        if direction in ["all", "east"]:
+            for y in self._range_float(min_pt.y, max_pt.y, edge_spacing):
+                z = self._base_service.query_elevation(surface, max_pt.x, y)
+                if z is not None:
+                    all_points.append((new_max_x, y, z))
+        
+        # South edge
+        if direction in ["all", "south"]:
+            for x in self._range_float(min_pt.x, max_pt.x, edge_spacing):
+                z = self._base_service.query_elevation(surface, x, min_pt.y)
+                if z is not None:
+                    all_points.append((x, new_min_y, z))
+        
+        # North edge
+        if direction in ["all", "north"]:
+            for x in self._range_float(min_pt.x, max_pt.x, edge_spacing):
+                z = self._base_service.query_elevation(surface, x, max_pt.y)
+                if z is not None:
+                    all_points.append((x, new_max_y, z))
+        
+        return self._base_service.create_tin_from_points(
+            self._remove_duplicate_points(all_points),
+            name=f"{surface.name}_extended",
+            surface_type=surface.surface_type
+        )
+    
+    def _range_float(self, start: float, end: float, step: float):
+        """Generate float range."""
+        val = start
+        while val <= end:
+            yield val
+            val += step
+    
+    def trim_along_line(
+        self,
+        surface: TINSurface,
+        line_start: Tuple[float, float],
+        line_end: Tuple[float, float],
+        side: str = "left"
+    ) -> TINSurface:
+        """
+        Trim surface along a line, keeping one side.
+        
+        Args:
+            surface: Surface to trim
+            line_start: Start point of trim line
+            line_end: End point of trim line
+            side: "left" or "right" of line to keep
+            
+        Returns:
+            Trimmed TINSurface
+        """
+        # Line direction vector
+        dx = line_end[0] - line_start[0]
+        dy = line_end[1] - line_start[1]
+        
+        # Perpendicular (left normal)
+        left_nx = -dy
+        left_ny = dx
+        
+        keep_indices = []
+        for i, v in enumerate(surface.vertices):
+            # Vector from line start to vertex
+            vx = v.x - line_start[0]
+            vy = v.y - line_start[1]
+            
+            # Dot with left normal (positive = left side)
+            dot = vx * left_nx + vy * left_ny
+            
+            if (side == "left" and dot >= 0) or (side == "right" and dot < 0):
+                keep_indices.append(i)
+        
+        if not keep_indices:
+            raise ValueError("No vertices on selected side")
+        
+        old_to_new = {old: new for new, old in enumerate(keep_indices)}
+        new_vertices = [surface.vertices[i] for i in keep_indices]
+        
+        new_triangles = []
+        for tri in surface.triangles:
+            if all(idx in old_to_new for idx in [tri.i, tri.j, tri.k]):
+                new_triangles.append(Triangle(
+                    i=old_to_new[tri.i],
+                    j=old_to_new[tri.j],
+                    k=old_to_new[tri.k]
+                ))
+        
+        if not new_triangles and len(new_vertices) >= 3:
+            points = [(v.x, v.y, v.z) for v in new_vertices]
+            return self._base_service.create_tin_from_points(
+                points,
+                name=f"{surface.name}_trimmed",
+                surface_type=surface.surface_type
+            )
+        
+        return TINSurface(
+            name=f"{surface.name}_trimmed",
+            vertices=new_vertices,
+            triangles=new_triangles,
+            surface_type=surface.surface_type,
+            seam_name=surface.seam_name
+        )
+    
+    def fill_holes(
+        self,
+        surface: TINSurface,
+        max_hole_area: Optional[float] = None
+    ) -> TINSurface:
+        """
+        Fill holes in a surface by re-triangulating.
+        
+        Args:
+            surface: Surface with holes
+            max_hole_area: Maximum hole area to fill (None = fill all)
+            
+        Returns:
+            Surface with holes filled
+        """
+        # Collect all vertices and re-triangulate
+        points = [(v.x, v.y, v.z) for v in surface.vertices]
+        
+        return self._base_service.create_tin_from_points(
+            points,
+            name=f"{surface.name}_filled",
+            surface_type=surface.surface_type
+        )
+    
+    # =========================================================================
+    # ADVANCED ANALYSIS OPERATIONS
+    # =========================================================================
+    
+    def calculate_curvature(
+        self,
+        surface: TINSurface,
+        grid_spacing: float = 10.0
+    ) -> Dict[str, Any]:
+        """
+        Calculate surface curvature (plan and profile).
+        
+        Args:
+            surface: Surface to analyze
+            grid_spacing: Sampling grid spacing
+            
+        Returns:
+            Dictionary with curvature grids
+        """
+        if not SCIPY_AVAILABLE:
+            raise ImportError("scipy required for curvature calculation")
+        
+        min_pt, max_pt = surface.get_extent()
+        
+        nx = int((max_pt.x - min_pt.x) / grid_spacing) + 1
+        ny = int((max_pt.y - min_pt.y) / grid_spacing) + 1
+        
+        # Sample elevations to grid
+        z_grid = np.full((ny, nx), np.nan)
+        
+        for j in range(ny):
+            for i in range(nx):
+                x = min_pt.x + i * grid_spacing
+                y = min_pt.y + j * grid_spacing
+                z = self._base_service.query_elevation(surface, x, y)
+                if z is not None:
+                    z_grid[j, i] = z
+        
+        # Calculate first derivatives
+        dzdx = np.gradient(z_grid, grid_spacing, axis=1)
+        dzdy = np.gradient(z_grid, grid_spacing, axis=0)
+        
+        # Calculate second derivatives
+        d2zdx2 = np.gradient(dzdx, grid_spacing, axis=1)
+        d2zdy2 = np.gradient(dzdy, grid_spacing, axis=0)
+        d2zdxdy = np.gradient(dzdx, grid_spacing, axis=0)
+        
+        # Profile curvature (in direction of slope)
+        p = dzdx**2 + dzdy**2
+        q = p + 1
+        
+        profile_curv = np.where(
+            p > 1e-10,
+            (d2zdx2 * dzdx**2 + 2 * d2zdxdy * dzdx * dzdy + d2zdy2 * dzdy**2) 
+            / (p * np.sqrt(q**3)),
+            0
+        )
+        
+        # Plan curvature (perpendicular to slope)
+        plan_curv = np.where(
+            p > 1e-10,
+            (d2zdx2 * dzdy**2 - 2 * d2zdxdy * dzdx * dzdy + d2zdy2 * dzdx**2)
+            / (p**1.5),
+            0
+        )
+        
+        # Mean curvature
+        mean_curv = (d2zdx2 + d2zdy2) / 2
+        
+        return {
+            'grid_spacing': grid_spacing,
+            'origin': (min_pt.x, min_pt.y),
+            'rows': ny,
+            'cols': nx,
+            'profile_curvature': profile_curv.tolist(),
+            'plan_curvature': plan_curv.tolist(),
+            'mean_curvature': mean_curv.tolist(),
+            'stats': {
+                'profile_min': float(np.nanmin(profile_curv)),
+                'profile_max': float(np.nanmax(profile_curv)),
+                'plan_min': float(np.nanmin(plan_curv)),
+                'plan_max': float(np.nanmax(plan_curv))
+            }
+        }
+    
+    def generate_cross_sections(
+        self,
+        surface: TINSurface,
+        baseline_start: Tuple[float, float],
+        baseline_end: Tuple[float, float],
+        section_spacing: float,
+        section_length: float,
+        sample_interval: float = 5.0
+    ) -> List[SurfaceProfile]:
+        """
+        Generate multiple cross-sections perpendicular to a baseline.
+        
+        Args:
+            surface: Surface to section
+            baseline_start: Start of baseline
+            baseline_end: End of baseline
+            section_spacing: Distance between sections
+            section_length: Length of each section (half on each side)
+            sample_interval: Sampling interval along sections
+            
+        Returns:
+            List of SurfaceProfile objects
+        """
+        # Baseline direction
+        bx = baseline_end[0] - baseline_start[0]
+        by = baseline_end[1] - baseline_start[1]
+        baseline_len = math.sqrt(bx*bx + by*by)
+        
+        if baseline_len < 0.001:
+            return []
+        
+        # Unit vectors
+        ubx = bx / baseline_len
+        uby = by / baseline_len
+        
+        # Perpendicular (left)
+        px = -uby
+        py = ubx
+        
+        sections = []
+        distance = 0.0
+        
+        while distance <= baseline_len:
+            # Center point on baseline
+            cx = baseline_start[0] + distance * ubx
+            cy = baseline_start[1] + distance * uby
+            
+            # Section endpoints
+            half_len = section_length / 2
+            start = (cx - half_len * px, cy - half_len * py)
+            end = (cx + half_len * px, cy + half_len * py)
+            
+            profile = self.generate_profile(surface, start, end, sample_interval)
+            profile.name = f"Section @ {distance:.1f}m"
+            sections.append(profile)
+            
+            distance += section_spacing
+        
+        return sections
+    
+    def find_local_extrema(
+        self,
+        surface: TINSurface,
+        grid_spacing: float = 10.0,
+        min_prominence: float = 1.0
+    ) -> Dict[str, List[Dict[str, float]]]:
+        """
+        Find local minima (pits) and maxima (peaks) on surface.
+        
+        Args:
+            surface: Surface to analyze
+            grid_spacing: Sampling grid spacing
+            min_prominence: Minimum elevation difference to qualify
+            
+        Returns:
+            Dictionary with 'minima' and 'maxima' lists
+        """
+        min_pt, max_pt = surface.get_extent()
+        
+        nx = int((max_pt.x - min_pt.x) / grid_spacing) + 1
+        ny = int((max_pt.y - min_pt.y) / grid_spacing) + 1
+        
+        minima = []
+        maxima = []
+        
+        for j in range(1, ny - 1):
+            for i in range(1, nx - 1):
+                x = min_pt.x + i * grid_spacing
+                y = min_pt.y + j * grid_spacing
+                z = self._base_service.query_elevation(surface, x, y)
+                
+                if z is None:
+                    continue
+                
+                # Sample neighbors
+                neighbors = []
+                for di in [-1, 0, 1]:
+                    for dj in [-1, 0, 1]:
+                        if di == 0 and dj == 0:
+                            continue
+                        nx_coord = min_pt.x + (i + di) * grid_spacing
+                        ny_coord = min_pt.y + (j + dj) * grid_spacing
+                        nz = self._base_service.query_elevation(surface, nx_coord, ny_coord)
+                        if nz is not None:
+                            neighbors.append(nz)
+                
+                if not neighbors:
+                    continue
+                
+                # Check if local maximum
+                if all(z > n + min_prominence for n in neighbors):
+                    maxima.append({
+                        'x': x, 'y': y, 'z': z,
+                        'prominence': z - max(neighbors)
+                    })
+                
+                # Check if local minimum
+                if all(z < n - min_prominence for n in neighbors):
+                    minima.append({
+                        'x': x, 'y': y, 'z': z,
+                        'prominence': min(neighbors) - z
+                    })
+        
+        return {
+            'minima': sorted(minima, key=lambda p: p['z']),
+            'maxima': sorted(maxima, key=lambda p: -p['z'])
+        }
+    
+    def watershed_analysis(
+        self,
+        surface: TINSurface,
+        pour_point: Tuple[float, float],
+        grid_spacing: float = 10.0
+    ) -> Dict[str, Any]:
+        """
+        Perform watershed analysis - find area draining to a pour point.
+        
+        Args:
+            surface: DEM surface
+            pour_point: (x, y) pour point location
+            grid_spacing: Analysis grid spacing
+            
+        Returns:
+            Dictionary with watershed boundary and statistics
+        """
+        if not SCIPY_AVAILABLE:
+            raise ImportError("scipy required for watershed analysis")
+        
+        min_pt, max_pt = surface.get_extent()
+        
+        nx = int((max_pt.x - min_pt.x) / grid_spacing) + 1
+        ny = int((max_pt.y - min_pt.y) / grid_spacing) + 1
+        
+        # Build elevation grid
+        z_grid = np.full((ny, nx), np.nan)
+        
+        for j in range(ny):
+            for i in range(nx):
+                x = min_pt.x + i * grid_spacing
+                y = min_pt.y + j * grid_spacing
+                z = self._base_service.query_elevation(surface, x, y)
+                if z is not None:
+                    z_grid[j, i] = z
+        
+        # Find pour point cell
+        pour_i = int((pour_point[0] - min_pt.x) / grid_spacing)
+        pour_j = int((pour_point[1] - min_pt.y) / grid_spacing)
+        
+        if not (0 <= pour_i < nx and 0 <= pour_j < ny):
+            raise ValueError("Pour point outside surface bounds")
+        
+        # Simple uphill search from pour point
+        visited = set()
+        watershed_cells = set()
+        queue = [(pour_j, pour_i)]
+        
+        while queue:
+            j, i = queue.pop(0)
+            
+            if (j, i) in visited:
+                continue
+            visited.add((j, i))
+            
+            if np.isnan(z_grid[j, i]):
+                continue
+            
+            watershed_cells.add((j, i))
+            z_current = z_grid[j, i]
+            
+            # Check all neighbors
+            for dj in [-1, 0, 1]:
+                for di in [-1, 0, 1]:
+                    if dj == 0 and di == 0:
+                        continue
+                    
+                    nj, ni = j + dj, i + di
+                    
+                    if not (0 <= ni < nx and 0 <= nj < ny):
+                        continue
+                    
+                    if (nj, ni) in visited:
+                        continue
+                    
+                    if np.isnan(z_grid[nj, ni]):
+                        continue
+                    
+                    # Flow direction: water flows downhill
+                    # So we trace uphill to find contributing area
+                    if z_grid[nj, ni] > z_current:
+                        queue.append((nj, ni))
+        
+        # Calculate watershed statistics
+        watershed_points = []
+        for j, i in watershed_cells:
+            x = min_pt.x + i * grid_spacing
+            y = min_pt.y + j * grid_spacing
+            watershed_points.append({
+                'x': x, 'y': y, 'z': float(z_grid[j, i])
+            })
+        
+        area = len(watershed_cells) * (grid_spacing ** 2)
+        
+        return {
+            'pour_point': {'x': pour_point[0], 'y': pour_point[1]},
+            'area_m2': area,
+            'area_ha': area / 10000,
+            'cell_count': len(watershed_cells),
+            'grid_spacing': grid_spacing,
+            'points': watershed_points
+        }
+    
+    # =========================================================================
     # INTERPOLATION OPERATIONS
     # =========================================================================
     
