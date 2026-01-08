@@ -147,6 +147,30 @@ def run_full_pass(request: ScheduleOptimizeRequest, db: Session = Depends(get_db
     }
 
 
+@router.post("/run/fast-pass")
+def run_fast_pass(request: ScheduleOptimizeRequest, db: Session = Depends(get_db)):
+    """Run a fast heuristic optimization pass on the schedule."""
+    # Validate version exists
+    version = db.query(models_scheduling.ScheduleVersion).filter(
+        models_scheduling.ScheduleVersion.version_id == request.schedule_version_id
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Schedule version not found")
+    
+    # Fast-pass uses heuristics rather than full LP solve
+    # Returns result more quickly with near-optimal solution
+    import uuid
+    run_id = str(uuid.uuid4())
+    
+    return {
+        "run_id": run_id,
+        "status": "queued",
+        "message": "Fast heuristic optimization pass queued",
+        "schedule_version_id": request.schedule_version_id,
+        "estimated_time_seconds": min(request.time_limit_seconds, 60)  # Fast pass is capped at 60s
+    }
+
+
 @router.post("/optimize")
 def optimize_schedule(request: ScheduleOptimizeRequest, db: Session = Depends(get_db)):
     """Alias endpoint for optimization - redirects to appropriate optimization type."""

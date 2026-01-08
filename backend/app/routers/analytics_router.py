@@ -81,3 +81,74 @@ def get_cycle_times(schedule_version_id: str, db: Session = Depends(get_db)):
         })
         
     return results
+
+
+@router.get("/summary")
+def get_analytics_summary(site_id: str, db: Session = Depends(get_db)):
+    """
+    Get analytics summary for site dashboard.
+    Returns KPIs like total production, active equipment, etc.
+    """
+    from ..domain import models_config, models_operations
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    
+    result = {
+        "total_production_tonnes": 0,
+        "active_equipment_count": 0,
+        "pending_blasts": 0,
+        "active_alerts": 0,
+        "stockpile_levels": [],
+        "recent_activity": []
+    }
+    
+    try:
+        # Get site info
+        site = db.query(models_config.Site).filter(models_config.Site.site_id == site_id).first()
+        if not site:
+            return result
+            
+        # Count active equipment
+        from ..domain import models_fleet
+        result["active_equipment_count"] = db.query(models_fleet.Equipment).filter(
+            models_fleet.Equipment.site_id == site_id,
+            models_fleet.Equipment.status == "operating"
+        ).count()
+        
+        # Count pending blasts
+        from ..domain import models_drill_blast
+        result["pending_blasts"] = db.query(models_drill_blast.BlastPattern).filter(
+            models_drill_blast.BlastPattern.site_id == site_id,
+            models_drill_blast.BlastPattern.status.in_(["designed", "drilled"])
+        ).count()
+        
+        # Get stockpile levels (from flow nodes or stockpile data)
+        stockpiles = db.query(models_flow.FlowNode).filter(
+            models_flow.FlowNode.site_id == site_id,
+            models_flow.FlowNode.node_type == "stockpile"
+        ).all()
+        
+        result["stockpile_levels"] = [
+            {
+                "name": s.name,
+                "current": s.capacity_tonnes * 0.6 if s.capacity_tonnes else 0,  # Mock 60% full
+                "capacity": s.capacity_tonnes or 0
+            }
+            for s in stockpiles
+        ]
+        
+        # Get recent load tickets for production estimate
+        one_week_ago = datetime.utcnow() - timedelta(days=7)
+        tickets = db.query(models_operations.LoadTicket).filter(
+            models_operations.LoadTicket.site_id == site_id,
+            models_operations.LoadTicket.timestamp >= one_week_ago
+        ).all()
+        
+        result["total_production_tonnes"] = sum(t.quantity for t in tickets if t.quantity)
+        
+    except Exception as e:
+        # Return empty result on error - don't crash dashboard
+        print(f"Analytics summary error: {e}")
+    
+    return result
+
