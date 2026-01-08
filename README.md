@@ -105,6 +105,9 @@ venv\Scripts\activate
 # On Windows (PowerShell):
 .\venv\Scripts\Activate.ps1
 
+# On Windows (Git Bash):
+source venv/Scripts/activate
+
 # On Mac/Linux:
 source venv/bin/activate
 ```
