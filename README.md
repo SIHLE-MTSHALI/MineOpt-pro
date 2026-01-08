@@ -7,348 +7,635 @@
 ![React](https://img.shields.io/badge/react-18+-61DAFB)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688)
 
-**Coal mine production scheduling and optimization system**
+**Enterprise Open-Cast Mine Production Scheduling and Optimization System**
 
-[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Architecture](#architecture) • [API Reference](#api-reference) • [Contributing](#contributing)
+[Quick Start](#quick-start) • [Features](#features) • [Setup Guide](#detailed-setup-guide) • [Usage Guide](#usage-guide) • [API Reference](#api-reference) • [Troubleshooting](#troubleshooting)
 
 </div>
 
 ---
 
-## Overview
+## What is MineOpt Pro?
 
-MineOpt Pro is a comprehensive production scheduling system designed for open-cast coal mining operations. It combines advanced optimization algorithms with an intuitive user interface to help mining engineers create optimal short-term production schedules that meet quality targets, equipment constraints, and production goals.
+MineOpt Pro is a comprehensive production scheduling and optimization platform designed for open-cast mining operations. It helps mining engineers:
 
-### Key Capabilities
+- **Plan production schedules** with 12-hour shift granularity
+- **Optimize material blending** to meet quality targets
+- **Track equipment fleet** in real-time with GPS
+- **Design drill & blast patterns** with fragmentation prediction
+- **Monitor slope stability** and environmental conditions
+- **Generate reports** and analytics dashboards
 
-- **Multi-period scheduling** with 12-hour shift granularity
-- **Quality blending optimization** to meet product specifications
-- **Material flow network** modeling from pit to product
-- **Wash plant integration** with cutpoint optimization
-- **Real-time stockpile tracking** with FIFO/LIFO reclaim strategies
-- **Equipment assignment** and utilization optimization
-- **Comprehensive reporting** with export capabilities
-
----
-
-## Features
-
-### 🗓️ Scheduling Engine
-
-| Feature | Description |
-|---------|-------------|
-| **Fast Pass** | Greedy algorithm for quick feasible schedules (~3 seconds) |
-| **Full Pass** | Iterative optimization with constraint relaxation |
-| **8-Stage Pipeline** | Validation → Candidates → Resources → Flow → Quality → Constraints → Finalize → Persist |
-| **Variable Production Control** | Per-period rate factors and manual overrides |
-
-### 🧮 Constraint Programming Solver
-
-| Feature | Description |
-|---------|-------------|
-| **13 Constraint Types** | Equality, range, all-different, sum, precedence, and more |
-| **Domain Propagation** | Arc consistency for efficient solving |
-| **Branch & Bound** | Optimal or near-optimal solutions |
-| **Mining-Specific Builder** | Task scheduling, resource capacity, flow optimization |
-| **Hard/Soft Constraints** | Required vs penalized violations |
-
-### ⚗️ Quality Management
-
-- **Blending optimization** across multiple sources
-- **Spec compliance checking** with Min/Max/Range constraints
-- **Penalty curve evaluation** (Linear, Quadratic, Step, Exponential)
-- **Basis conversion** (ARB, ADB, DAF)
-- **Quality field tracking**: CV, Ash, Moisture, Sulphur, VM, HGI
-
-### 📦 Stockpile Management
-
-| Type | Features |
-|------|----------|
-| **Simple Stockpile** | Capacity tracking, FIFO/LIFO/Proportional reclaim |
-| **Staged Stockpile** | Multi-pile state machine (Receiving → Resting → Available → Depleted) |
-| **Parcel Tracking** | Individual tonnes with quality preservation |
-
-### 🏭 Wash Plant Integration
-
-- **Wash table interpolation** for RD cutpoint selection
-- **Cutpoint optimization modes**: Fixed, Target Quality, Optimizer
-- **Product/Discard yield calculation**
-- **Operating point tracking** per schedule period
-
-### 🔒 Security & Audit
-
-- **Role-Based Access Control** with 6 predefined roles
-- **18 granular permissions** (view, edit, execute, admin)
-- **Complete audit trail** for all entity changes
-- **Schedule immutability** after publishing
-- **Version forking** for change management
-
-### 📊 Reporting
-
-9 standard report types:
-1. Daily Plan Summary
-2. Shift Plan
-3. Equipment Utilisation
-4. Production by Material
-5. Haulage Routes
-6. Stockpile Balances
-7. Plant Performance
-8. Quality Compliance
-9. Planned vs Actual
-
----
-
-## Technology Stack
-
-### Backend
-
-| Technology | Purpose |
-|------------|---------|
-| **Python 3.10+** | Core language |
-| **FastAPI** | REST API framework |
-| **SQLAlchemy 2.0** | ORM with async support |
-| **SQLite/PostgreSQL** | Database |
-| **Pydantic v2** | Data validation |
-| **Uvicorn** | ASGI server |
-
-### Frontend
-
-| Technology | Purpose |
-|------------|---------|
-| **React 18** | UI framework |
-| **Vite** | Build tool |
-| **React Three Fiber** | 3D visualization |
-| **Lucide React** | Icons |
-| **Tailwind CSS** | Styling |
-
----
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10 or higher
-- Node.js 18 or higher
-- Git
-
-### Backend Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/SIHLE-MTSHALI/MineOpt-pro.git
-cd MineOpt-pro
-
-# Create virtual environment
-cd backend
-python -m venv venv
-
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-```
+Whether you're a mining engineer, scheduler, or supervisor, MineOpt Pro provides the tools you need to optimize your mining operations.
 
 ---
 
 ## Quick Start
 
-### 1. Start the Backend Server
+> **For Beginners**: Follow these steps exactly in order. Each step must complete before moving to the next.
+
+### Prerequisites
+
+Before you begin, make sure you have:
+
+| Requirement | Version | How to Check | Download |
+|-------------|---------|--------------|----------|
+| Python | 3.10+ | `python --version` | [python.org](https://python.org) |
+| Node.js | 18+ | `node --version` | [nodejs.org](https://nodejs.org) |
+| Git | Any | `git --version` | [git-scm.com](https://git-scm.com) |
+
+### Step 1: Clone the Repository
 
 ```bash
+git clone https://github.com/SIHLE-MTSHALI/Open-Cast_Mine_Production_Optimization_Dashboard.git
+cd Open-Cast_Mine_Production_Optimization_Dashboard
+```
+
+### Step 2: Set Up the Backend
+
+```bash
+# Navigate to the backend folder
 cd backend
+
+# Create a virtual environment
+python -m venv venv
+
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+
+# Install Python packages (this may take 2-3 minutes)
+pip install -r requirements.txt
+```
+
+### Step 3: Start the Backend Server
+
+```bash
+# Make sure you're in the backend folder with venv activated
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at `http://localhost:8000`
+You should see:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+```
 
-### 2. Start the Frontend
+**✅ Keep this terminal open and running!**
+
+### Step 4: Set Up the Frontend (New Terminal)
+
+Open a **new terminal window** (keep the backend running):
 
 ```bash
+# Navigate to the frontend folder
 cd frontend
+
+# Install npm packages (this may take 2-3 minutes)
+npm install
+
+# Start the development server
 npm run dev
 ```
 
-The UI will be available at `http://localhost:5173`
+You should see:
+```
+  VITE v4.x.x  ready in xxx ms
 
-### 3. Access the API Documentation
+  ➜  Local:   http://localhost:5173/
+```
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+### Step 5: Open the Application
+
+Open your web browser and go to: **http://localhost:5173**
+
+🎉 **Congratulations! MineOpt Pro is now running!**
 
 ---
 
-## Architecture
+## Features
 
-### System Overview
+### 📍 Fleet Management System
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend (React)                        │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐            │
-│  │ 3D View │ │  Gantt  │ │ Reports │ │  Flow   │            │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘            │
-└───────┼──────────┼──────────┼──────────┼────────────────────┘
-        │          │          │          │
-        └──────────┴──────────┴──────────┘
-                         │
-                    REST API
-                         │
-┌────────────────────────┼────────────────────────────────────┐
-│                   Backend (FastAPI)                          │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                    Routers                           │    │
-│  │  config │ calendar │ schedule │ optimization │ ...   │    │
-│  └───────────────────────┬─────────────────────────────┘    │
-│  ┌───────────────────────┴─────────────────────────────┐    │
-│  │                   Services                           │    │
-│  │  ScheduleEngine │ BlendingService │ StockpileService │    │
-│  └───────────────────────┬─────────────────────────────┘    │
-│  ┌───────────────────────┴─────────────────────────────┐    │
-│  │                 Domain Models                        │    │
-│  │  Site │ Calendar │ Resource │ FlowNetwork │ Schedule │    │
-│  └───────────────────────┬─────────────────────────────┘    │
-└──────────────────────────┼──────────────────────────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  Database   │
-                    │  (SQLite)   │
-                    └─────────────┘
+Track and manage your mining fleet in real-time.
+
+| Feature | Description |
+|---------|-------------|
+| **GPS Tracking** | Live location of all equipment on the map |
+| **Geofencing** | Set restricted zones and get violation alerts |
+| **Haul Cycle Analysis** | Automatic detection of loading, hauling, dumping cycles |
+| **Maintenance Scheduling** | Gantt-style calendar for planned maintenance |
+| **Equipment Health** | ML-based failure prediction with risk scores |
+
+**Frontend Components:**
+- `FleetMapOverlay` - Equipment icons on interactive map
+- `EquipmentDetailCard` - Popup with status and controls
+- `HaulCycleDashboard` - Cycle KPIs and analytics
+- `MaintenanceCalendar` - Maintenance schedule view
+- `EquipmentHealthDashboard` - Health scores and alerts
+
+---
+
+### 💥 Drill & Blast Module
+
+Design and simulate blast patterns with fragmentation prediction.
+
+| Feature | Description |
+|---------|-------------|
+| **Pattern Designer** | Interactive 2D grid for hole placement |
+| **Delay Timing** | Visual delay sequence visualization |
+| **Kuz-Ram Prediction** | Calculate expected fragmentation (X50) |
+| **Drill Log Generation** | Export drill hole specifications |
+
+**How to Use:**
+1. Go to the Drill & Blast section
+2. Click "New Pattern" to create a blast design
+3. Set burden and spacing parameters
+4. Place drill holes on the grid
+5. Assign delay numbers for sequencing
+6. Click "Predict Fragmentation" to see expected results
+
+**Frontend Component:** `BlastPatternDesigner`
+
+---
+
+### 📦 Material Tracking & Shift Operations
+
+Track material movements and manage shift handovers.
+
+| Feature | Description |
+|---------|-------------|
+| **Load Tickets** | Record each truck load with origin, destination, tonnage |
+| **Material Flow** | Sankey diagram visualization of material movements |
+| **Shift Handovers** | Digital handover forms with notes and tasks |
+| **Incident Logging** | Record and track safety incidents |
+
+**Frontend Components:**
+- `MaterialFlowSankey` - Visual flow diagram
+- `ShiftHandoverForm` - Digital handover form
+
+---
+
+### 🏔️ Geotechnical Monitoring
+
+Monitor slope stability and water levels.
+
+| Feature | Description |
+|---------|-------------|
+| **Prism Monitoring** | Track survey prism movements |
+| **Displacement Alerts** | Automatic alerts when thresholds exceeded |
+| **Water Level Tracking** | Monitor bore water levels |
+| **Trend Analysis** | Historical movement visualization |
+
+**How to Use:**
+1. Navigate to Monitoring > Slope Stability
+2. View prism status cards with color-coded alerts
+3. Click a prism to see detailed displacement history
+4. Set alert thresholds in Settings
+
+**Frontend Component:** `SlopeMonitoringPanel`
+
+---
+
+### 🌬️ Environmental Monitoring
+
+Track dust levels and air quality.
+
+| Feature | Description |
+|---------|-------------|
+| **Dust Monitoring** | PM10 and PM2.5 real-time readings |
+| **Exceedance Alerts** | Automatic alerts when limits exceeded |
+| **Historical Trends** | View readings over time |
+| **Weather Integration** | Wind speed and direction display |
+
+**Frontend Component:** `DustMonitoringDashboard`
+
+---
+
+### ⚠️ Safety Management
+
+Manage hazards and operator fatigue.
+
+| Feature | Description |
+|---------|-------------|
+| **Hazard Zones** | Define exclusion and hazard areas on map |
+| **Zone Violations** | Track equipment entering hazard zones |
+| **Fatigue Scoring** | Calculate operator fatigue risk (0-100) |
+| **Rest Recommendations** | Automatic rest break suggestions |
+
+---
+
+### 🔌 Integration Hub
+
+Connect to external systems.
+
+| System | Connection Type | Features |
+|--------|-----------------|----------|
+| **SCADA** | OPC-UA | Tag reading, historian queries |
+| **SAP** | RFC | Cost rates, work order sync |
+| **Oracle EBS** | REST | Invoice posting, production records |
+
+---
+
+### 🤖 Machine Learning Services
+
+Predictive analytics for equipment and operations.
+
+| Model | Purpose | Output |
+|-------|---------|--------|
+| **Failure Predictor** | Predict equipment failures | Risk score 0-100 |
+| **Grade Predictor** | Predict ore grade from drilling | Grade % |
+| **Route Optimizer** | Find optimal haul routes | Shortest path |
+
+---
+
+### 📊 Query Builder
+
+Create ad-hoc reports without SQL knowledge.
+
+| Feature | Description |
+|---------|-------------|
+| **Table Selection** | Choose from available data tables |
+| **Column Picker** | Select fields to include |
+| **Filters** | Add conditions (equals, greater than, etc.) |
+| **Aggregations** | Sum, average, count, min, max |
+| **Export** | Download as CSV or chart |
+
+**How to Use:**
+1. Go to Reports > Query Builder
+2. Select a table from the dropdown
+3. Choose columns to display
+4. Add filters if needed
+5. Click "Run Query"
+6. Export results as needed
+
+**Frontend Component:** `QueryBuilder`
+
+---
+
+### 🎥 3D Visualization
+
+Advanced 3D surface visualization and comparison.
+
+| Feature | Description |
+|---------|-------------|
+| **Surface Timeline** | Play back surface changes over time |
+| **Version Comparison** | Compare two surfaces side-by-side |
+| **Cut/Fill Volumes** | Calculate volume differences |
+| **Excavation Progress** | Track cumulative excavation chart |
+| **3D Measurements** | Point, distance, area measurements |
+| **LOD Settings** | Adjust render quality for performance |
+
+**Frontend Components:**
+- `SurfaceTimelinePlayer` - Timeline scrubber for playback
+- `SurfaceComparisonOverlay` - Cut/fill comparison
+- `ExcavationProgressChart` - Cumulative volume chart
+- `MeasurementToolbar3D` - Measurement tools
+- `LODSettingsPanel` - Render quality settings
+
+---
+
+## Detailed Setup Guide
+
+### Option 1: Basic Development Setup
+
+This is the simplest setup for development and testing.
+
+```bash
+# Terminal 1: Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-### Project Structure
+### Option 2: Docker Setup
 
+For consistent environments, use Docker:
+
+```bash
+# Build and run both services
+docker-compose up --build
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
 ```
-MineOpt-pro/
-├── backend/
-│   ├── app/
-│   │   ├── domain/           # SQLAlchemy models
-│   │   │   ├── models_core.py
-│   │   │   ├── models_calendar.py
-│   │   │   ├── models_resource.py
-│   │   │   ├── models_flow.py
-│   │   │   ├── models_scheduling.py
-│   │   │   └── ...
-│   │   ├── routers/          # FastAPI endpoints
-│   │   │   ├── config_router.py
-│   │   │   ├── schedule_router.py
-│   │   │   ├── optimization_router.py
-│   │   │   └── ...
-│   │   ├── services/         # Business logic
-│   │   │   ├── schedule_engine.py
-│   │   │   ├── blending_service.py
-│   │   │   ├── stockpile_service.py
-│   │   │   └── ...
-│   │   ├── database.py
-│   │   └── main.py
-│   ├── tests/                # pytest test suite
-│   │   ├── test_domain_models.py
-│   │   ├── test_services.py
-│   │   ├── test_api_endpoints.py
-│   │   └── test_integration.py
-│   ├── requirements.txt
-│   └── pytest.ini
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── spatial/      # 3D visualization
-│   │   │   ├── scheduler/    # Gantt and scheduling
-│   │   │   ├── flow/         # Flow network editor
-│   │   │   ├── reporting/    # Dashboard and reports
-│   │   │   └── ui/           # Common UI components
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-└── README.md
+
+**docker-compose.yml** is included in the project.
+
+### Option 3: Production Setup
+
+For production deployment:
+
+```bash
+# Backend
+cd backend
+pip install gunicorn
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+
+# Frontend (build static files)
+cd frontend
+npm run build
+# Serve the 'dist' folder with your web server (nginx, etc.)
 ```
+
+---
+
+## Usage Guide
+
+### Starting the Application
+
+| Component | Command | URL |
+|-----------|---------|-----|
+| Backend API | `uvicorn app.main:app --reload --port 8000` | http://localhost:8000 |
+| Frontend UI | `npm run dev` | http://localhost:5173 |
+| API Docs | (auto-generated) | http://localhost:8000/docs |
+
+### Navigating the Interface
+
+1. **Dashboard** - Overview of key metrics
+2. **3D Viewer** - Interactive mine visualization
+3. **Scheduling** - Gantt charts and production plans
+4. **Fleet** - Equipment tracking and maintenance
+5. **Drill & Blast** - Pattern design
+6. **Operations** - Material and shift management
+7. **Monitoring** - Geotech and environmental
+8. **Reports** - Query builder and dashboards
+
+### Common Workflows
+
+#### Creating a Schedule
+
+1. Go to Scheduling > New Schedule
+2. Select the calendar period
+3. Choose resources to include
+4. Run "Fast Pass" for quick schedule
+5. Review and adjust as needed
+6. Publish when ready
+
+#### Tracking Equipment
+
+1. Go to Fleet > Map View
+2. See all equipment locations in real-time
+3. Click an equipment icon for details
+4. View haul cycles and utilization
+
+#### Designing a Blast Pattern
+
+1. Go to Drill & Blast > Pattern Designer
+2. Set pattern parameters (burden, spacing)
+3. Place holes on the grid
+4. Set delay sequence
+5. Run fragmentation prediction
+
+#### Monitoring Slopes
+
+1. Go to Monitoring > Slope Stability
+2. View prism status cards
+3. Check alert history
+4. Export data for analysis
 
 ---
 
 ## API Reference
 
-### Core Endpoints
+### Health Check
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Health check |
-| `GET` | `/config/sites` | List all sites |
-| `GET` | `/calendar/calendars` | List calendars |
-| `GET` | `/schedule/versions` | List schedule versions |
-| `POST` | `/optimization/fast-pass` | Run fast optimization |
-| `POST` | `/optimization/full-pass` | Run full optimization |
+```bash
+GET /
+# Returns: {"status": "MineOpt Pro Server Running", "version": "2.0.0-Enterprise"}
+```
 
-### Quality Endpoints
+### Fleet Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/quality/fields` | Get quality field definitions |
-| `POST` | `/quality/calculate-blend` | Calculate blended quality |
-| `POST` | `/quality/check-compliance` | Check spec compliance |
+```bash
+# Get all equipment
+GET /fleet/equipment
 
-### Integration Endpoints
+# Get equipment GPS readings
+GET /fleet/equipment/{equipment_id}/gps
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/integration/fleet/actual-tonnes` | Import FMS actuals |
-| `POST` | `/integration/survey/geometry` | Update geometry |
-| `POST` | `/integration/publish` | Publish schedule |
-| `GET` | `/integration/dispatch-targets/{id}` | Get dispatch targets |
+# Record GPS reading
+POST /fleet/equipment/{equipment_id}/gps
+Body: {"latitude": -26.2, "longitude": 28.0, "heading": 90, "speed_kmh": 25}
 
-### Security Endpoints
+# Get haul cycle KPIs
+GET /fleet/equipment/{equipment_id}/haul-cycle-kpis
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/security/roles` | List available roles |
-| `GET` | `/security/permissions` | List permissions |
-| `GET` | `/security/audit/logs` | Query audit logs |
-| `POST` | `/security/schedule/fork` | Fork schedule version |
+### Drill & Blast Endpoints
+
+```bash
+# Create blast pattern
+POST /drill-blast/patterns
+Body: {"site_id": "...", "pattern_name": "Pattern 1", "burden": 4.0, "spacing": 5.0}
+
+# Get fragmentation prediction
+GET /drill-blast/patterns/{pattern_id}/fragmentation
+```
+
+### Operations Endpoints
+
+```bash
+# Create load ticket
+POST /operations/tickets
+Body: {"truck_fleet_number": "TR01", "origin_name": "Pit A", "tonnes": 120}
+
+# Get current shift
+GET /operations/sites/{site_id}/current-shift
+```
+
+### Monitoring Endpoints
+
+```bash
+# Record prism reading
+POST /monitoring/prisms/readings
+Body: {"prism_id": "...", "x": 1000.0, "y": 2000.0, "z": 100.0}
+
+# Get slope alerts
+GET /monitoring/sites/{site_id}/slope-alerts
+```
+
+### Surface History Endpoints
+
+```bash
+# List surface versions
+GET /surfaces/{surface_id}/history
+
+# Compare surfaces
+POST /surfaces/compare
+Body: {"base_version_id": "...", "compare_version_id": "..."}
+
+# Get excavation progress
+GET /surfaces/sites/{site_id}/progress
+```
+
+### Full API Documentation
+
+Access the interactive API docs at: **http://localhost:8000/docs**
 
 ---
 
-## Domain Model
-
-### Core Entities
+## Project Structure
 
 ```
-Site ──────┬──── Calendar ──── Period
-           │
-           ├──── Resource ──── ResourcePeriodParameters
-           │
-           ├──── ActivityArea ──── Slice
-           │
-           └──── FlowNetwork ──┬── FlowNode ──── StockpileConfig
-                               │
-                               └── FlowArc ──── ArcQualityObjective
-
-ScheduleVersion ──── Task ──── FlowResult
-                          │
-                          └── InventoryBalance
+Open-Cast_Mine_Production_Optimization_Dashboard/
+│
+├── backend/                      # Python FastAPI backend
+│   ├── app/
+│   │   ├── domain/               # Database models
+│   │   │   ├── models_core.py
+│   │   │   ├── models_fleet.py
+│   │   │   ├── models_drill_blast.py
+│   │   │   ├── models_material_shift.py
+│   │   │   ├── models_geotech_safety.py
+│   │   │   └── models_surface_history.py
+│   │   │
+│   │   ├── services/             # Business logic
+│   │   │   ├── fleet_service.py
+│   │   │   ├── drill_blast_service.py
+│   │   │   ├── material_shift_service.py
+│   │   │   ├── geotech_safety_service.py
+│   │   │   ├── integration_hub.py
+│   │   │   ├── ml_service.py
+│   │   │   ├── query_builder_service.py
+│   │   │   └── surface_history_service.py
+│   │   │
+│   │   ├── routers/              # API endpoints
+│   │   │   ├── fleet_router.py
+│   │   │   ├── drill_blast_router.py
+│   │   │   ├── operations_router.py
+│   │   │   ├── monitoring_router.py
+│   │   │   └── surface_history_router.py
+│   │   │
+│   │   ├── database.py           # Database connection
+│   │   └── main.py               # Application entry point
+│   │
+│   ├── tests/                    # Test files
+│   └── requirements.txt          # Python dependencies
+│
+├── frontend/                     # React frontend
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── fleet/            # Fleet management UI
+│   │   │   │   ├── FleetMapOverlay.jsx
+│   │   │   │   ├── EquipmentDetailCard.jsx
+│   │   │   │   ├── HaulCycleDashboard.jsx
+│   │   │   │   ├── MaintenanceCalendar.jsx
+│   │   │   │   └── EquipmentHealthDashboard.jsx
+│   │   │   │
+│   │   │   ├── drill-blast/      # Drill & blast UI
+│   │   │   │   └── BlastPatternDesigner.jsx
+│   │   │   │
+│   │   │   ├── operations/       # Operations UI
+│   │   │   │   └── ShiftHandoverForm.jsx
+│   │   │   │
+│   │   │   ├── material/         # Material tracking UI
+│   │   │   │   └── MaterialFlowSankey.jsx
+│   │   │   │
+│   │   │   ├── geotech/          # Geotechnical UI
+│   │   │   │   └── SlopeMonitoringPanel.jsx
+│   │   │   │
+│   │   │   ├── environmental/    # Environmental UI
+│   │   │   │   └── DustMonitoringDashboard.jsx
+│   │   │   │
+│   │   │   ├── reporting/        # Reporting UI
+│   │   │   │   └── QueryBuilder.jsx
+│   │   │   │
+│   │   │   └── viewer3d/         # 3D visualization UI
+│   │   │       ├── SurfaceTimelinePlayer.jsx
+│   │   │       ├── SurfaceComparisonOverlay.jsx
+│   │   │       ├── ExcavationProgressChart.jsx
+│   │   │       ├── MeasurementToolbar3D.jsx
+│   │   │       └── LODSettingsPanel.jsx
+│   │   │
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   │
+│   └── package.json              # JavaScript dependencies
+│
+└── README.md                     # This file
 ```
 
-### Quality Fields
+---
 
-| Field | Unit | Typical Range | Basis |
-|-------|------|---------------|-------|
-| CV | MJ/kg | 18-28 | ARB |
-| Ash | % | 8-25 | ADB |
-| Moisture | % | 4-15 | AR |
-| Sulphur | % | 0.3-2.0 | ADB |
-| VM | % | 20-35 | ADB |
-| HGI | - | 40-80 | - |
+## Troubleshooting
+
+### Backend Issues
+
+#### "Module not found" Error
+
+```bash
+# Make sure venv is activated
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Mac/Linux
+
+# Reinstall dependencies
+pip install -r requirements.txt
+```
+
+#### "Port 8000 already in use"
+
+```bash
+# Use a different port
+uvicorn app.main:app --reload --port 8001
+```
+
+#### Database Connection Error
+
+```bash
+# The database is created automatically on first run
+# If issues persist, delete mineopt.db and restart
+del mineopt.db  # Windows
+rm mineopt.db   # Mac/Linux
+```
+
+### Frontend Issues
+
+#### "npm install" Fails
+
+```bash
+# Clear npm cache
+npm cache clean --force
+
+# Delete node_modules and try again
+rmdir /s /q node_modules  # Windows
+rm -rf node_modules       # Mac/Linux
+
+npm install
+```
+
+#### "Cannot connect to backend"
+
+1. Check backend is running on port 8000
+2. Check browser console for CORS errors
+3. Verify `http://localhost:8000` is accessible
+
+#### Page Shows Blank
+
+```bash
+# Check for JavaScript errors in browser console (F12)
+# Restart the dev server
+npm run dev
+```
+
+### Common Error Messages
+
+| Error | Solution |
+|-------|----------|
+| `ENOENT: no such file or directory` | Run `npm install` in the frontend folder |
+| `ModuleNotFoundError` | Activate venv and run `pip install -r requirements.txt` |
+| `Connection refused` | Make sure backend server is running |
+| `CORS error` | Backend and frontend ports must be 8000 and 5173 |
 
 ---
 
@@ -356,158 +643,82 @@ ScheduleVersion ──── Task ──── FlowResult
 
 ### Environment Variables
 
+Create a `.env` file in the backend folder:
+
 ```bash
-# Database
+# Database (SQLite is default, PostgreSQL for production)
 DATABASE_URL=sqlite:///./mineopt.db
+# For PostgreSQL:
+# DATABASE_URL=postgresql://user:password@localhost/mineopt
 
 # Server
 HOST=0.0.0.0
 PORT=8000
 
-# CORS
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
 # Security
 SECRET_KEY=your-secret-key-here
+
+# CORS (allowed frontend origins)
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-### Role Permissions
+### Changing the Database
 
-| Role | Permissions |
-|------|-------------|
-| `viewer` | view:schedule, view:resources, view:reports |
-| `planner` | viewer + edit:schedule, run:optimization |
-| `senior_planner` | planner + publish:schedule, edit:resources |
-| `supervisor` | view + publish + audit |
-| `admin` | all except manage:sites |
-| `super_admin` | all permissions |
+By default, MineOpt Pro uses SQLite (file-based, good for development).
+
+For production, use PostgreSQL:
+
+1. Install PostgreSQL
+2. Create a database: `createdb mineopt`
+3. Update `DATABASE_URL` in `.env`
+4. Restart the backend
 
 ---
 
 ## Testing
 
-### Run All Tests
+### Running Backend Tests
 
 ```bash
 cd backend
 pytest
-```
 
-### Run Specific Tests
+# With verbose output
+pytest -v
 
-```bash
-# Unit tests only
-pytest tests/test_services.py -v
+# Specific test file
+pytest tests/test_services.py
 
-# Integration tests
-pytest -m integration
-
-# With coverage
+# With coverage report
 pytest --cov=app --cov-report=html
 ```
 
-### Test Categories
+### Running Frontend Tests
 
-| File | Coverage |
-|------|----------|
-| `test_domain_models.py` | Site, Calendar, Resource, Flow, Schedule |
-| `test_services.py` | Quality, Blending, Stockpile, Audit, Security |
-| `test_api_endpoints.py` | All REST endpoints |
-| `test_integration.py` | E2E workflows, scenarios |
-
----
-
-## Development
-
-### Code Style
-
-- Python: Black formatter, isort imports
-- JavaScript: ESLint with React rules
-- Commits: Conventional Commits format
-
-### Adding a New Router
-
-1. Create router file in `backend/app/routers/`
-2. Define endpoints with Pydantic models
-3. Import and register in `main.py`
-4. Add tests in `tests/`
-
-### Adding a New Model
-
-1. Create model in appropriate `domain/models_*.py`
-2. Import in `main.py` for table creation
-3. Create service methods if needed
-4. Add unit tests
-
----
-
-## Deployment
-
-### Docker (Recommended)
-
-```dockerfile
-# Backend Dockerfile
-FROM python:3.10-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```bash
+cd frontend
+npm test
 ```
-
-### Production Checklist
-
-- [ ] Set `DEBUG=False`
-- [ ] Configure PostgreSQL instead of SQLite
-- [ ] Set up HTTPS with valid certificates
-- [ ] Configure proper CORS origins
-- [ ] Set strong `SECRET_KEY`
-- [ ] Enable audit logging to persistent storage
-- [ ] Set up monitoring and alerting
-
----
-
-## Roadmap
-
-### Completed ✅
-
-- [x] Domain model with 25+ entities
-- [x] 8-stage scheduling engine
-- [x] Quality blending and constraints
-- [x] Stockpile management (simple + staged)
-- [x] Wash plant integration
-- [x] 3D spatial visualization
-- [x] Gantt chart scheduling
-- [x] Flow network editor
-- [x] Reporting dashboard
-- [x] RBAC and audit logging
-- [x] Test suite
-
-### Future Enhancements
-
-- [ ] Real-time GPS integration
-- [ ] Machine learning predictions
-- [ ] Mobile companion app
-- [ ] Multi-tenant SaaS deployment
-- [ ] Advanced constraint programming solver
 
 ---
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes
+4. Run tests: `pytest` and `npm test`
+5. Commit: `git commit -m 'feat: add my feature'`
+6. Push: `git push origin feature/my-feature`
+7. Open a Pull Request
 
 ---
 
-## Acknowledgments
+## Need Help?
 
-- Built for the mining industry by mining professionals
-- Inspired by real-world coal mine scheduling challenges
-- Special thanks to all contributors
+- **API Documentation**: http://localhost:8000/docs
+- **GitHub Issues**: Report bugs or request features
+- **Discussions**: Ask questions and share ideas
 
 ---
 
@@ -515,6 +726,6 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 **MineOpt Pro** - Optimizing Mine Production, One Shift at a Time
 
-[Report Bug](https://github.com/SIHLE-MTSHALI/MineOpt-pro/issues) • [Request Feature](https://github.com/SIHLE-MTSHALI/MineOpt-pro/issues)
+Built with ❤️ for the mining industry
 
 </div>
