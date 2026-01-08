@@ -20,6 +20,22 @@ def seed_data(db: Session = Depends(get_db)):
         "version": {"version_id": result["version_id"]}
     }
 
+
+@router.post("/seed-comprehensive-demo")
+def seed_comprehensive_data(db: Session = Depends(get_db)):
+    """
+    Seed comprehensive demo data with 3 coal mining sites,
+    50+ equipment pieces, and 90 days of historical data.
+    
+    This creates realistic operational data for full app demonstration.
+    """
+    from ..services import comprehensive_seed_service
+    result = comprehensive_seed_service.seed_all(db)
+    return {
+        "message": "Comprehensive demo data seeded successfully",
+        **result
+    }
+
 @router.get("/sites")
 def get_sites(db: Session = Depends(get_db)):
     return db.query(models_core.Site).all()
