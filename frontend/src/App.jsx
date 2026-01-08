@@ -8,6 +8,9 @@ import FleetDashboard from './pages/FleetDashboard';
 import DrillBlastDashboard from './pages/DrillBlastDashboard';
 import OperationsDashboard from './pages/OperationsDashboard';
 import MonitoringDashboard from './pages/MonitoringDashboard';
+import NotFoundPage from './pages/NotFoundPage';
+import { SiteProvider } from './context/SiteContext';
+import { ToastProvider } from './context/ToastContext';
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -54,92 +57,96 @@ const RegisterWrapper = () => {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
+      <SiteProvider>
+        <ToastProvider>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
 
-        <Route
-          path="/login"
-          element={
-            <AuthRoute>
-              <LoginWrapper />
-            </AuthRoute>
-          }
-        />
+            <Route
+              path="/login"
+              element={
+                <AuthRoute>
+                  <LoginWrapper />
+                </AuthRoute>
+              }
+            />
 
-        <Route
-          path="/register"
-          element={
-            <AuthRoute>
-              <RegisterWrapper />
-            </AuthRoute>
-          }
-        />
+            <Route
+              path="/register"
+              element={
+                <AuthRoute>
+                  <RegisterWrapper />
+                </AuthRoute>
+              }
+            />
 
-        {/* Protected Routes */}
-        <Route
-          path="/app/dashboard"
-          element={
-            <ProtectedRoute>
-              <SiteDashboard />
-            </ProtectedRoute>
-          }
-        />
+            {/* Protected Routes */}
+            <Route
+              path="/app/dashboard"
+              element={
+                <ProtectedRoute>
+                  <SiteDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/app/planner"
-          element={
-            <ProtectedRoute>
-              <PlannerWorkspace />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/app/planner"
+              element={
+                <ProtectedRoute>
+                  <PlannerWorkspace />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/app/fleet"
-          element={
-            <ProtectedRoute>
-              <FleetDashboard />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/app/fleet"
+              element={
+                <ProtectedRoute>
+                  <FleetDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/app/drill-blast"
-          element={
-            <ProtectedRoute>
-              <DrillBlastDashboard />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/app/drill-blast"
+              element={
+                <ProtectedRoute>
+                  <DrillBlastDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/app/operations"
-          element={
-            <ProtectedRoute>
-              <OperationsDashboard />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/app/operations"
+              element={
+                <ProtectedRoute>
+                  <OperationsDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/app/monitoring"
-          element={
-            <ProtectedRoute>
-              <MonitoringDashboard />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/app/monitoring"
+              element={
+                <ProtectedRoute>
+                  <MonitoringDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Legacy /app route redirects to dashboard */}
-        <Route
-          path="/app"
-          element={<Navigate to="/app/dashboard" replace />}
-        />
+            {/* Legacy /app route redirects to dashboard */}
+            <Route
+              path="/app"
+              element={<Navigate to="/app/dashboard" replace />}
+            />
 
-        {/* Catch-all redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            {/* 404 Page */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </ToastProvider>
+      </SiteProvider>
     </BrowserRouter>
   );
 }

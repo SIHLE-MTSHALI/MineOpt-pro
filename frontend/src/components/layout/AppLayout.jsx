@@ -10,12 +10,15 @@
  */
 
 import React, { useState, createContext, useContext } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
     Box, Layers, Calendar, Truck, Settings, Database,
     GitBranch, Package, Zap, BarChart2, LogOut, ChevronLeft,
-    ChevronRight, User, Bell, Moon, Sun, HelpCircle
+    ChevronRight, User, Bell, Moon, Sun, HelpCircle,
+    Home, Target, ClipboardList, Mountain, Wind, Upload, Link
 } from 'lucide-react';
+import { useSite } from '../../context/SiteContext';
 
 // ============================================
 // APP CONTEXT
@@ -57,22 +60,51 @@ export function AppProvider({ children }) {
 
 const navSections = [
     {
+        title: 'Home',
+        items: [
+            { id: 'dashboard', label: 'Dashboard', icon: Home, route: '/app/dashboard' },
+        ],
+    },
+    {
         title: 'Planning',
         items: [
-            { id: 'spatial', label: '3D Spatial View', icon: Box },
-            { id: 'gantt', label: 'Gantt Schedule', icon: Calendar },
-            { id: 'schedule-control', label: 'Schedule Control', icon: Zap },
-            { id: 'reporting', label: 'Reports & Analytics', icon: BarChart2 },
+            { id: 'spatial', label: '3D Spatial View', icon: Box, route: '/app/planner' },
+            { id: 'gantt', label: 'Gantt Schedule', icon: Calendar, route: '/app/planner' },
+            { id: 'schedule-control', label: 'Schedule Control', icon: Zap, route: '/app/planner' },
+            { id: 'reporting', label: 'Reports & Analytics', icon: BarChart2, route: '/app/planner' },
+        ],
+    },
+    {
+        title: 'Operations',
+        items: [
+            { id: 'fleet', label: 'Fleet Management', icon: Truck, route: '/app/fleet' },
+            { id: 'drill-blast', label: 'Drill & Blast', icon: Target, route: '/app/drill-blast' },
+            { id: 'shift-ops', label: 'Shift Operations', icon: ClipboardList, route: '/app/operations' },
+        ],
+    },
+    {
+        title: 'Monitoring',
+        items: [
+            { id: 'geotech', label: 'Slope Stability', icon: Mountain, route: '/app/monitoring' },
+            { id: 'environment', label: 'Environment', icon: Wind, route: '/app/monitoring' },
         ],
     },
     {
         title: 'Configuration',
         items: [
-            { id: 'flow-editor', label: 'Flow Network', icon: GitBranch },
-            { id: 'product-specs', label: 'Product Specs', icon: Package },
-            { id: 'resources', label: 'Resources', icon: Truck },
-            { id: 'geology', label: 'Block Model', icon: Layers },
-            { id: 'data', label: 'Data Model', icon: Database },
+            { id: 'flow-editor', label: 'Flow Network', icon: GitBranch, route: '/app/planner' },
+            { id: 'product-specs', label: 'Product Specs', icon: Package, route: '/app/planner' },
+            { id: 'resources', label: 'Resources', icon: Truck, route: '/app/planner' },
+            { id: 'geology', label: 'Block Model', icon: Layers, route: '/app/planner' },
+            { id: 'data', label: 'Data Model', icon: Database, route: '/app/planner' },
+        ],
+    },
+    {
+        title: 'Data & Integration',
+        items: [
+            { id: 'import', label: 'Import Data', icon: Upload, route: '/app/planner' },
+            { id: 'integrations', label: 'Integrations', icon: Link, route: '/app/planner' },
+            { id: 'settings', label: 'Settings', icon: Settings, route: '/app/planner' },
         ],
     },
 ];
@@ -114,6 +146,23 @@ function NavItem({ item, active, collapsed, onClick }) {
 
 export function AppSidebar() {
     const { sidebarCollapsed, toggleSidebar, activeModule, setActiveModule } = useApp();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const handleNavClick = (item) => {
+        setActiveModule(item.id);
+        if (item.route) {
+            navigate(item.route);
+        }
+    };
+
+    const isActiveItem = (item) => {
+        // Check if current route matches this item's route
+        if (item.route && location.pathname === item.route) {
+            return true;
+        }
+        return activeModule === item.id;
+    };
 
     return (
         <aside
@@ -128,16 +177,18 @@ export function AppSidebar() {
                 sidebarCollapsed ? 'justify-center' : 'justify-between'
             )}>
                 {!sidebarCollapsed && (
-                    <div>
+                    <button onClick={() => navigate('/app/dashboard')} className="hover:opacity-80 transition-opacity">
                         <h1 className="text-lg font-bold text-white tracking-tight">
-                            MineOpt<span className="text-primary-500">Pro</span>
+                            MineOpt<span className="text-blue-500">Pro</span>
                         </h1>
                         <p className="text-[10px] text-neutral-500 -mt-0.5">Enterprise Edition</p>
-                    </div>
+                    </button>
                 )}
 
                 {sidebarCollapsed && (
-                    <span className="text-lg font-bold text-primary-500">M</span>
+                    <button onClick={() => navigate('/app/dashboard')} className="hover:opacity-80 transition-opacity">
+                        <span className="text-lg font-bold text-blue-500">M</span>
+                    </button>
                 )}
 
                 <button
@@ -164,9 +215,9 @@ export function AppSidebar() {
                             <NavItem
                                 key={item.id}
                                 item={item}
-                                active={activeModule === item.id}
+                                active={isActiveItem(item)}
                                 collapsed={sidebarCollapsed}
-                                onClick={() => setActiveModule(item.id)}
+                                onClick={() => handleNavClick(item)}
                             />
                         ))}
                     </div>
@@ -182,7 +233,7 @@ export function AppSidebar() {
                         sidebarCollapsed && 'justify-center'
                     )}
                 >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                         SU
                     </div>
                     {!sidebarCollapsed && (
