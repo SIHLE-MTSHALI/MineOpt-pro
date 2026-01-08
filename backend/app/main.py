@@ -37,7 +37,8 @@ from .routers import (
     fleet_router,
     drill_blast_router,
     operations_router,
-    monitoring_router
+    monitoring_router,
+    surface_history_router
 )
 from .database import engine, Base
 
@@ -91,6 +92,9 @@ from .domain.models_geotech_safety import (
     MonitoringBore, WaterLevelReading, DustMonitor, DustReading,
     RehabilitationArea, HazardZone, HazardZoneEntry,
     FatigueEvent, OperatorFatigueScore
+)
+from .domain.models_surface_history import (
+    SurfaceVersion, SurfaceComparison, ExcavationProgress
 )
 
 
@@ -151,6 +155,7 @@ app.include_router(fleet_router.router)
 app.include_router(drill_blast_router.router)
 app.include_router(operations_router.router)
 app.include_router(monitoring_router.router)
+app.include_router(surface_history_router.router)
 
 
 @app.get("/")
