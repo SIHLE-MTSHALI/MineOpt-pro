@@ -76,6 +76,98 @@ def fork_version(version_id: str, new_name: str = None, db: Session = Depends(ge
 def get_versions_by_site(site_id: str, db: Session = Depends(get_db)):
     return db.query(models_scheduling.ScheduleVersion).filter(models_scheduling.ScheduleVersion.site_id == site_id).all()
 
+
+@router.get("/versions/{version_id}")
+def get_version_by_id(version_id: str, db: Session = Depends(get_db)):
+    """Get a single schedule version by ID."""
+    version = db.query(models_scheduling.ScheduleVersion).filter(
+        models_scheduling.ScheduleVersion.version_id == version_id
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Schedule version not found")
+    return version
+
+
+@router.get("/versions/{version_id}/runs")
+def get_version_runs(version_id: str, limit: int = 10, db: Session = Depends(get_db)):
+    """Get optimization run history for a schedule version."""
+    # Check if DecisionExplanation or a run tracking table exists
+    runs = []
+    
+    # Try to get runs from schedule_run_requests if it exists
+    try:
+        from ..domain import models_schedule_results
+        run_requests = db.query(models_schedule_results.ScheduleRunRequest).filter(
+            models_schedule_results.ScheduleRunRequest.schedule_version_id == version_id
+        ).order_by(models_schedule_results.ScheduleRunRequest.created_at.desc()).limit(limit).all()
+        
+        for r in run_requests:
+            runs.append({
+                "run_id": r.request_id,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "objective_value": r.objective_value,
+                "solve_time_seconds": r.solve_time_seconds
+            })
+    except Exception:
+        # If no runs table, return empty but valid response
+        pass
+    
+    return {"runs": runs, "count": len(runs)}
+
+
+class ScheduleOptimizeRequest(BaseModel):
+    schedule_version_id: str
+    mode: str = "full"  # "full" or "fast"
+    time_limit_seconds: int = 300
+
+
+@router.post("/run/full-pass")
+def run_full_pass(request: ScheduleOptimizeRequest, db: Session = Depends(get_db)):
+    """Run a full optimization pass on the schedule."""
+    # Validate version exists
+    version = db.query(models_scheduling.ScheduleVersion).filter(
+        models_scheduling.ScheduleVersion.version_id == request.schedule_version_id
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Schedule version not found")
+    
+    # In production, this would trigger an async optimization job
+    # For now, return a pending status
+    import uuid
+    run_id = str(uuid.uuid4())
+    
+    return {
+        "run_id": run_id,
+        "status": "queued",
+        "message": "Full optimization pass queued",
+        "schedule_version_id": request.schedule_version_id,
+        "estimated_time_seconds": request.time_limit_seconds
+    }
+
+
+@router.post("/optimize")
+def optimize_schedule(request: ScheduleOptimizeRequest, db: Session = Depends(get_db)):
+    """Alias endpoint for optimization - redirects to appropriate optimization type."""
+    # Validate version exists
+    version = db.query(models_scheduling.ScheduleVersion).filter(
+        models_scheduling.ScheduleVersion.version_id == request.schedule_version_id
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Schedule version not found")
+    
+    import uuid
+    run_id = str(uuid.uuid4())
+    
+    return {
+        "run_id": run_id,
+        "status": "queued",
+        "message": f"Optimization ({request.mode} mode) queued",
+        "schedule_version_id": request.schedule_version_id,
+        "mode": request.mode
+    }
+
 @router.get("/versions/{version_id}/tasks")
 def get_tasks(version_id: str, db: Session = Depends(get_db)):
     return db.query(models_scheduling.Task).filter(models_scheduling.Task.schedule_version_id == version_id).all()

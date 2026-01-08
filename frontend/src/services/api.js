@@ -292,6 +292,135 @@ export const reportingAPI = {
 };
 
 // ============================================
+// Fleet Management API
+// ============================================
+export const fleetAPI = {
+    getEquipmentList: async (siteId, type, status) => {
+        const params = new URLSearchParams();
+        if (type) params.append('equipment_type', type);
+        if (status) params.append('status', status);
+        const response = await api.get(`/fleet/sites/${siteId}/equipment?${params}`);
+        return response.data;
+    },
+
+    getEquipment: async (equipmentId) => {
+        const response = await api.get(`/fleet/equipment/${equipmentId}`);
+        return response.data;
+    },
+
+    updateStatus: async (equipmentId, status, operatorId) => {
+        const response = await api.patch(`/fleet/equipment/${equipmentId}/status`, { status, operatorId });
+        return response.data;
+    },
+
+    getPositions: async (siteId) => {
+        const response = await api.get(`/fleet/sites/${siteId}/positions`);
+        return response.data;
+    },
+
+    getMaintenancePending: async (siteId) => {
+        const response = await api.get(`/fleet/sites/${siteId}/maintenance/pending`);
+        return response.data;
+    },
+
+    scheduleMaintenance: async (data) => {
+        const response = await api.post('/fleet/maintenance', data);
+        return response.data;
+    }
+};
+
+// ============================================
+// Drill & Blast API
+// ============================================
+export const drillBlastAPI = {
+    getPatterns: async (siteId, status) => {
+        const params = status ? `?status=${status}` : '';
+        const response = await api.get(`/drill-blast/sites/${siteId}/patterns${params}`);
+        return response.data;
+    },
+
+    createPattern: async (data) => {
+        const response = await api.post('/drill-blast/patterns', data);
+        return response.data;
+    },
+
+    getPattern: async (patternId) => {
+        const response = await api.get(`/drill-blast/patterns/${patternId}`);
+        return response.data;
+    },
+
+    getHoles: async (patternId) => {
+        const response = await api.get(`/drill-blast/patterns/${patternId}/holes`);
+        return response.data;
+    },
+
+    createBlastEvent: async (data) => {
+        const response = await api.post('/drill-blast/events', data);
+        return response.data;
+    }
+};
+
+// ============================================
+// Operations API
+// ============================================
+export const operationsAPI = {
+    getActiveShift: async (siteId) => {
+        const response = await api.get(`/operations/sites/${siteId}/active-shift`);
+        return response.data;
+    },
+
+    startShift: async (data) => {
+        const response = await api.post('/operations/shifts', data);
+        return response.data;
+    },
+
+    endShift: async (shiftId) => {
+        const response = await api.post(`/operations/shifts/${shiftId}/end`);
+        return response.data;
+    },
+
+    getShiftTickets: async (shiftId) => {
+        const response = await api.get(`/operations/shifts/${shiftId}/tickets`);
+        return response.data;
+    },
+
+    createTicket: async (data) => {
+        const response = await api.post('/operations/tickets', data);
+        return response.data;
+    },
+
+    createHandover: async (data) => {
+        const response = await api.post('/operations/handovers', data);
+        return response.data;
+    }
+};
+
+// ============================================
+// Monitoring API
+// ============================================
+export const monitoringAPI = {
+    getSlopeAlerts: async (siteId) => {
+        const response = await api.get(`/monitoring/sites/${siteId}/slope-alerts`);
+        return response.data;
+    },
+
+    getDustExceedances: async (siteId, startDate, endDate) => {
+        const response = await api.get(`/monitoring/sites/${siteId}/dust-exceedances?start_date=${startDate}&end_date=${endDate}`);
+        return response.data;
+    },
+
+    createPrism: async (data) => {
+        const response = await api.post('/monitoring/prisms', data);
+        return response.data;
+    },
+
+    createDustMonitor: async (data) => {
+        const response = await api.post('/monitoring/dust-monitors', data);
+        return response.data;
+    }
+};
+
+// ============================================
 // Settings API
 // ============================================
 export const settingsAPI = {

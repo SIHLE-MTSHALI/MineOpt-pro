@@ -4,6 +4,10 @@ import PlannerWorkspace from './pages/PlannerWorkspace';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import SiteDashboard from './pages/SiteDashboard';
+import FleetDashboard from './pages/FleetDashboard';
+import DrillBlastDashboard from './pages/DrillBlastDashboard';
+import OperationsDashboard from './pages/OperationsDashboard';
+import MonitoringDashboard from './pages/MonitoringDashboard';
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -87,6 +91,42 @@ function App() {
           element={
             <ProtectedRoute>
               <PlannerWorkspace />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/fleet"
+          element={
+            <ProtectedRoute>
+              <FleetDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/drill-blast"
+          element={
+            <ProtectedRoute>
+              <DrillBlastDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/operations"
+          element={
+            <ProtectedRoute>
+              <OperationsDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/monitoring"
+          element={
+            <ProtectedRoute>
+              <MonitoringDashboard />
             </ProtectedRoute>
           }
         />

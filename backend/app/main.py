@@ -39,7 +39,12 @@ from .routers import (
     operations_router,
     monitoring_router,
     surface_history_router,
-    analytics_router
+    analytics_router,
+    # Missing endpoint routers
+    washplant_router,
+    geology_router,
+    settings_router,
+    resources_router
 )
 from .database import engine, Base
 
@@ -158,6 +163,12 @@ app.include_router(operations_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(surface_history_router.router)
 app.include_router(analytics_router.router)
+
+# Missing endpoint routers
+app.include_router(washplant_router.router)
+app.include_router(geology_router.router)
+app.include_router(settings_router.router)
+app.include_router(resources_router.router)
 
 
 @app.get("/")

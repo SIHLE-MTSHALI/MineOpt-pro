@@ -114,8 +114,8 @@ const SiteDashboard = () => {
         setLoading(true);
         try {
             // Fetch site data
-            const siteRes = await axios.get(`${API_BASE}/config/site`);
-            const site = siteRes.data;
+            const siteRes = await axios.get(`${API_BASE}/config/sites`);
+            const site = Array.isArray(siteRes.data) ? siteRes.data[0] : siteRes.data;
 
             // Fetch current schedule
             const schedulesRes = await axios.get(`${API_BASE}/schedule/site/${site.site_id}/versions`);
@@ -281,29 +281,29 @@ const SiteDashboard = () => {
                             <h2 className="text-lg font-semibold">Quick Actions</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <ActionButton
-                                    icon={Play}
-                                    label="Run Fast Pass"
-                                    description="Quick optimization check"
-                                    onClick={() => navigate('/app')}
+                                    icon={Truck}
+                                    label="Fleet Management"
+                                    description="Track equipment status"
+                                    onClick={() => navigate('/app/fleet')}
                                     primary
                                 />
                                 <ActionButton
-                                    icon={FileText}
-                                    label="Create Scenario"
-                                    description="Fork current schedule"
-                                    onClick={() => navigate('/app')}
-                                />
-                                <ActionButton
-                                    icon={BarChart3}
-                                    label="View Reports"
-                                    description="Production analytics"
-                                    onClick={() => navigate('/app')}
+                                    icon={Factory}
+                                    label="Drill & Blast"
+                                    description="Manage patterns"
+                                    onClick={() => navigate('/app/drill-blast')}
                                 />
                                 <ActionButton
                                     icon={Settings}
-                                    label="Site Settings"
-                                    description="Configure resources"
-                                    onClick={() => navigate('/app')}
+                                    label="Operations"
+                                    description="Shift & production log"
+                                    onClick={() => navigate('/app/operations')}
+                                />
+                                <ActionButton
+                                    icon={TrendingUp}
+                                    label="Monitoring"
+                                    description="Geotech & Environment"
+                                    onClick={() => navigate('/app/monitoring')}
                                 />
                             </div>
                         </div>

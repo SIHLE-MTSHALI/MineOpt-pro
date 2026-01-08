@@ -79,8 +79,10 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
         setLoading(true);
         console.log("Gantt: Fetching tasks for version:", scheduleVersionId);
         try {
-            const res = await axios.get(`${API_BASE}/schedule/versions/${scheduleVersionId}`);
-            const backendTasks = res.data.tasks.map(t => ({
+            // Fetch tasks directly from the tasks endpoint (not from version which may not include tasks)
+            const res = await axios.get(`${API_BASE}/schedule/versions/${scheduleVersionId}/tasks`);
+            const tasksData = Array.isArray(res.data) ? res.data : (res.data?.tasks || []);
+            const backendTasks = tasksData.map(t => ({
                 id: t.task_id,
                 resourceId: t.resource_id,
                 periodId: t.period_id,
@@ -103,6 +105,8 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
             setTasks(backendTasks);
         } catch (e) {
             console.error("Failed to fetch tasks", e);
+            // On failure, use empty array instead of crashing
+            setTasks([]);
         } finally {
             setLoading(false);
         }
@@ -114,7 +118,9 @@ const GanttChart = ({ siteId, resources = [], scheduleVersionId, periods = [], o
     const fetchMaintenanceWindows = async () => {
         try {
             const res = await axios.get(`${API_BASE}/resources/maintenance?site_id=${siteId}`);
-            setMaintenanceWindows(res.data || []);
+            // API returns {maintenance_schedule: [...]} or an array directly
+            const data = res.data?.maintenance_schedule || res.data || [];
+            setMaintenanceWindows(Array.isArray(data) ? data : []);
         } catch (e) {
             // No maintenance data - that's fine
             setMaintenanceWindows([]);

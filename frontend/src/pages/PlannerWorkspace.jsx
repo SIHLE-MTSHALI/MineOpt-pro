@@ -294,12 +294,14 @@ const PlannerWorkspace = () => {
                     )}
 
                     {activeTab === 'gantt' && (
-                        <GanttChart
-                            siteId={siteData.siteId}
-                            resources={siteData.resources}
-                            scheduleVersionId={siteData.activeScheduleId}
-                            periods={siteData.periods}
-                        />
+                        <ErrorBoundary componentName="Gantt Chart">
+                            <GanttChart
+                                siteId={siteData.siteId}
+                                resources={siteData.resources || []}
+                                scheduleVersionId={siteData.activeScheduleId}
+                                periods={siteData.periods || []}
+                            />
+                        </ErrorBoundary>
                     )}
 
                     {activeTab === 'schedule-control' && (

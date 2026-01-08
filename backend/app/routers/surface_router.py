@@ -446,7 +446,7 @@ async def generate_contours(
 @router.get("/{surface_id}/export")
 async def export_surface(
     surface_id: str,
-    format: str = Query("dxf", regex="^(dxf|xyz|asc)$"),
+    format: str = Query("dxf", pattern="^(dxf|xyz|asc)$"),
     db: Session = Depends(get_db)
 ):
     """Export a surface to file format (DXF, XYZ, or ASC)."""

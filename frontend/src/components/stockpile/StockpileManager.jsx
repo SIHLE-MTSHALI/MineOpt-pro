@@ -317,7 +317,18 @@ const StockpileManager = ({ siteId }) => {
         setLoading(true);
         try {
             const data = await stockpileAPI.getStockpiles(siteId);
-            setStockpiles(data);
+            // Normalize API response to match frontend expected format
+            const normalized = (Array.isArray(data) ? data : []).map(sp => ({
+                id: sp.node_id || sp.id,
+                name: sp.name,
+                type: sp.inventory_method === 'Aggregate' ? 'ROM' : 'Product',
+                current_tonnes: sp.current_tonnage || sp.current_tonnes || 0,
+                capacity: sp.capacity_tonnes || sp.capacity || 100000,
+                quality: sp.current_grade || sp.quality || {},
+                inventory_method: sp.inventory_method,
+                parcel_count: sp.parcel_count || 0
+            }));
+            setStockpiles(normalized);
         } catch (e) {
             // Use sample data if API not available
             setStockpiles([

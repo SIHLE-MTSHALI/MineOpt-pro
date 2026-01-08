@@ -88,6 +88,31 @@ def get_quality_fields(site_id: str, db: Session = Depends(get_db)):
     return fields
 
 
+@router.get("/site/{site_id}/specs")
+def get_quality_specs(site_id: str, db: Session = Depends(get_db)):
+    """Alias: Get quality specifications for a site (same as /fields/site/{site_id})."""
+    fields = db.query(QualityField)\
+        .filter(QualityField.site_id == site_id)\
+        .all()
+    
+    # Return in a specs format the frontend expects
+    return {
+        "specs": [
+            {
+                "field_id": f.quality_field_id,
+                "name": f.name,
+                "display_name": f.description if f.description else f.name,
+                "unit": f.units,
+                "basis": f.basis,
+                "aggregation_rule": f.aggregation_rule,
+                "constraints": []
+            }
+            for f in fields
+        ],
+        "site_id": site_id
+    }
+
+
 @router.get("/fields/{field_id}")
 def get_quality_field(field_id: str, db: Session = Depends(get_db)):
     """Get a specific quality field by ID."""

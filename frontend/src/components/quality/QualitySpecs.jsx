@@ -177,7 +177,9 @@ const QualitySpecs = ({ siteId }) => {
         try {
             // Try to fetch from API, fall back to mock data
             const res = await axios.get(`http://localhost:8000/quality/site/${siteId}/specs`);
-            setSpecs(res.data);
+            // API returns { specs: [...] } or an array directly
+            const data = res.data?.specs || res.data || [];
+            setSpecs(Array.isArray(data) ? data : []);
         } catch (e) {
             // Use sample data if API not available
             setSpecs([

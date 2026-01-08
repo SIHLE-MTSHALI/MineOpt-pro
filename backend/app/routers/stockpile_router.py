@@ -116,6 +116,12 @@ def get_stockpiles(site_id: Optional[str] = None, db: Session = Depends(get_db))
     return results
 
 
+@router.get("/site/{site_id}")
+def get_stockpiles_by_site(site_id: str, db: Session = Depends(get_db)):
+    """Alias: Get all stockpiles for a specific site."""
+    return get_stockpiles(site_id=site_id, db=db)
+
+
 @router.get("/{node_id}", response_model=StockpileState)
 def get_stockpile(node_id: str, db: Session = Depends(get_db)):
     """Get a specific stockpile's state."""

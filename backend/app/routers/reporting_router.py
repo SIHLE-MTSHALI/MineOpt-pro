@@ -22,6 +22,135 @@ router = APIRouter(prefix="/reporting", tags=["Reporting"])
 
 
 # =============================================================================
+# Query Builder Endpoints
+# =============================================================================
+
+@router.get("/tables")
+def get_available_tables(db: Session = Depends(get_db)):
+    """Get list of available database tables for Query Builder."""
+    return [
+        {
+            "tableName": "tasks",
+            "columnCount": 8,
+            "columns": [
+                {"columnName": "task_id", "dataType": "string"},
+                {"columnName": "resource_id", "dataType": "string"},
+                {"columnName": "planned_quantity", "dataType": "number"},
+                {"columnName": "actual_quantity", "dataType": "number"},
+                {"columnName": "period_id", "dataType": "string"},
+                {"columnName": "status", "dataType": "string"},
+                {"columnName": "created_at", "dataType": "datetime"},
+                {"columnName": "activity_area_id", "dataType": "string"}
+            ]
+        },
+        {
+            "tableName": "schedule_versions",
+            "columnCount": 5,
+            "columns": [
+                {"columnName": "version_id", "dataType": "string"},
+                {"columnName": "site_id", "dataType": "string"},
+                {"columnName": "name", "dataType": "string"},
+                {"columnName": "status", "dataType": "string"},
+                {"columnName": "created_at", "dataType": "datetime"}
+            ]
+        },
+        {
+            "tableName": "resources",
+            "columnCount": 6,
+            "columns": [
+                {"columnName": "resource_id", "dataType": "string"},
+                {"columnName": "name", "dataType": "string"},
+                {"columnName": "resource_type", "dataType": "string"},
+                {"columnName": "base_rate", "dataType": "number"},
+                {"columnName": "cost_per_hour", "dataType": "number"},
+                {"columnName": "site_id", "dataType": "string"}
+            ]
+        },
+        {
+            "tableName": "activity_areas",
+            "columnCount": 6,
+            "columns": [
+                {"columnName": "area_id", "dataType": "string"},
+                {"columnName": "name", "dataType": "string"},
+                {"columnName": "bench_level", "dataType": "string"},
+                {"columnName": "elevation_rl", "dataType": "number"},
+                {"columnName": "priority", "dataType": "number"},
+                {"columnName": "is_locked", "dataType": "boolean"}
+            ]
+        },
+        {
+            "tableName": "periods",
+            "columnCount": 5,
+            "columns": [
+                {"columnName": "period_id", "dataType": "string"},
+                {"columnName": "calendar_id", "dataType": "string"},
+                {"columnName": "start_datetime", "dataType": "datetime"},
+                {"columnName": "end_datetime", "dataType": "datetime"},
+                {"columnName": "group_shift", "dataType": "string"}
+            ]
+        },
+        {
+            "tableName": "flow_nodes",
+            "columnCount": 5,
+            "columns": [
+                {"columnName": "node_id", "dataType": "string"},
+                {"columnName": "name", "dataType": "string"},
+                {"columnName": "node_type", "dataType": "string"},
+                {"columnName": "capacity", "dataType": "number"},
+                {"columnName": "network_id", "dataType": "string"}
+            ]
+        }
+    ]
+
+
+@router.post("/query")
+def execute_query(query: dict, db: Session = Depends(get_db)):
+    """Execute an ad-hoc query from Query Builder."""
+    # This is a simplified query executor
+    # In production, this would parse and validate the query safely
+    table_name = query.get("from_table", "tasks")
+    columns = query.get("select_columns", ["*"])
+    limit = query.get("limit", 100)
+    
+    # For safety, we only allow predefined tables
+    allowed_tables = {
+        "tasks": models_scheduling.Task,
+        "schedule_versions": models_scheduling.ScheduleVersion,
+        "resources": models_resource.Resource,
+        "activity_areas": models_resource.ActivityArea,
+        "periods": models_calendar.Period
+    }
+    
+    if table_name not in allowed_tables:
+        return {"error": f"Table '{table_name}' not available", "rows": [], "columns": columns}
+    
+    model = allowed_tables[table_name]
+    results = db.query(model).limit(limit).all()
+    
+    # Convert to dict representation
+    rows = []
+    for r in results:
+        row = {}
+        for col in columns:
+            if col == "*":
+                # Get all attributes
+                for key in dir(r):
+                    if not key.startswith('_') and not callable(getattr(r, key)):
+                        val = getattr(r, key, None)
+                        if not isinstance(val, (list, dict)) or isinstance(val, (str, int, float, bool, type(None))):
+                            row[key] = val
+            elif hasattr(r, col):
+                row[col] = getattr(r, col, None)
+        rows.append(row)
+    
+    return {
+        "columns": columns if columns != ["*"] else list(rows[0].keys()) if rows else [],
+        "rows": rows,
+        "rowCount": len(rows)
+    }
+
+
+# =============================================================================
 # Pydantic Models
 # =============================================================================
 
