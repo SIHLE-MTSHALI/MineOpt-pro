@@ -5,12 +5,22 @@ import Viewport3D from '../components/spatial/Viewport3D';
 import GanttChart from '../components/scheduler/GanttChart';
 import ScheduleControl from '../components/scheduler/ScheduleControl';
 import Dashboard from '../components/reporting/Dashboard';
+import ReportingModule from '../components/reporting/ReportingModule';
+import Spatial3DToolbar from '../components/spatial/Spatial3DToolbar';
 import FlowEditor from '../components/flow/FlowEditor';
 import QualitySpecs from '../components/quality/QualitySpecs';
 import StockpileManager from '../components/stockpile/StockpileManager';
 import WashPlantConfig from '../components/washplant/WashPlantConfig';
 import GeologyViewer from '../components/geology/GeologyViewer';
 import SettingsPanel from '../components/settings/SettingsPanel';
+// New module imports
+import HaulCycleDashboard from '../components/fleet/HaulCycleDashboard';
+import BlastPatternDesigner from '../components/drill-blast/BlastPatternDesigner';
+import ShiftHandoverForm from '../components/operations/ShiftHandoverForm';
+import SlopeMonitoringPanel from '../components/geotech/SlopeMonitoringPanel';
+import DustMonitoringDashboard from '../components/environmental/DustMonitoringDashboard';
+import TerrainImportPanel from '../components/import/TerrainImportPanel';
+import ExternalIdMappingUI from '../components/integration/ExternalIdMappingUI';
 import axios from 'axios';
 
 
@@ -265,7 +275,14 @@ const PlannerWorkspace = () => {
 
                     {activeTab === 'spatial' && (
                         <ErrorBoundary componentName="3D Spatial View">
-                            <div className="h-full w-full">
+                            <div className="h-full w-full relative">
+                                <Spatial3DToolbar
+                                    siteId={siteData.siteId}
+                                    surfaceVersions={[]}
+                                    currentSurfaceId={null}
+                                    onSurfaceChange={() => { }}
+                                    onCompare={() => { }}
+                                />
                                 <Viewport3D
                                     siteData={siteData}
                                     onBlockSelect={setSelectedBlock}
@@ -293,7 +310,10 @@ const PlannerWorkspace = () => {
                     )}
 
                     {activeTab === 'reporting' && (
-                        <Dashboard scheduleVersionId={siteData.activeScheduleId} />
+                        <ReportingModule
+                            scheduleVersionId={siteData.activeScheduleId}
+                            siteId={siteData.siteId}
+                        />
                     )}
 
                     {activeTab === 'flow-editor' && (
@@ -323,7 +343,50 @@ const PlannerWorkspace = () => {
                         <SettingsPanel siteId={siteData.siteId} />
                     )}
 
-                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs', 'data', 'resources', 'geology', 'settings'].includes(activeTab) && (
+                    {/* New Module Tabs */}
+                    {activeTab === 'fleet' && (
+                        <ErrorBoundary componentName="Fleet Management">
+                            <HaulCycleDashboard siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'drill-blast' && (
+                        <ErrorBoundary componentName="Drill & Blast">
+                            <BlastPatternDesigner siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'shift-ops' && (
+                        <ErrorBoundary componentName="Shift Operations">
+                            <ShiftHandoverForm siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'geotech' && (
+                        <ErrorBoundary componentName="Slope Monitoring">
+                            <SlopeMonitoringPanel siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'environment' && (
+                        <ErrorBoundary componentName="Environmental Monitoring">
+                            <DustMonitoringDashboard siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'import' && (
+                        <ErrorBoundary componentName="Data Import">
+                            <TerrainImportPanel siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {activeTab === 'integrations' && (
+                        <ErrorBoundary componentName="Integrations">
+                            <ExternalIdMappingUI siteId={siteData.siteId} />
+                        </ErrorBoundary>
+                    )}
+
+                    {!['spatial', 'gantt', 'reporting', 'flow-editor', 'product-specs', 'data', 'resources', 'geology', 'settings', 'schedule-control', 'fleet', 'drill-blast', 'shift-ops', 'geotech', 'environment', 'import', 'integrations'].includes(activeTab) && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                             <div className="text-center">
                                 <h2 className="text-xl font-semibold mb-2">Module Under Construction</h2>

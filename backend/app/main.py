@@ -38,7 +38,8 @@ from .routers import (
     drill_blast_router,
     operations_router,
     monitoring_router,
-    surface_history_router
+    surface_history_router,
+    analytics_router
 )
 from .database import engine, Base
 
@@ -156,6 +157,7 @@ app.include_router(drill_blast_router.router)
 app.include_router(operations_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(surface_history_router.router)
+app.include_router(analytics_router.router)
 
 
 @app.get("/")

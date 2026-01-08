@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..domain import models_scheduling, models_resources, models_flow
+from ..domain import models_scheduling, models_resource, models_flow
 from typing import List, Dict, Any
 import math
 
@@ -18,7 +18,7 @@ def get_cycle_times(schedule_version_id: str, db: Session = Depends(get_db)):
     results = []
     
     # Cache Areas
-    areas = {a.area_id: a for a in db.query(models_resources.ActivityArea).all()}
+    areas = {a.area_id: a for a in db.query(models_resource.ActivityArea).all()}
     
     # Destination Positions (Mocked if missing from DB FlowNodes)
     # Ideally we'd query FlowNodes -> location_geometry
