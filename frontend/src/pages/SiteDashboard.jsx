@@ -17,6 +17,7 @@ import {
     Truck, Factory, ChevronRight, RefreshCw
 } from 'lucide-react';
 import axios from 'axios';
+import { AppLayout } from '../components/layout/AppLayout';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -158,211 +159,213 @@ const SiteDashboard = () => {
     const currentDate = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white">
-            {/* Header */}
-            <div className="border-b border-slate-800 bg-slate-900/50">
-                <div className="max-w-7xl mx-auto px-6 py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold">
-                                {loading ? 'Loading...' : dashboardData?.site?.name || 'Site Dashboard'}
-                            </h1>
-                            <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
-                                <span className="flex items-center gap-1">
-                                    <Calendar size={14} />
-                                    {currentDate}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <Clock size={14} />
-                                    {currentShift}
-                                </span>
+        <AppLayout>
+            <div className="flex-1 overflow-auto bg-slate-950 text-white">
+                {/* Header */}
+                <div className="border-b border-slate-800 bg-slate-900/50">
+                    <div className="max-w-7xl mx-auto px-6 py-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-2xl font-bold">
+                                    {loading ? 'Loading...' : dashboardData?.site?.name || 'Site Dashboard'}
+                                </h1>
+                                <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar size={14} />
+                                        {currentDate}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Clock size={14} />
+                                        {currentShift}
+                                    </span>
+                                </div>
                             </div>
+                            <button
+                                onClick={fetchDashboardData}
+                                className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                                title="Refresh"
+                            >
+                                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                            </button>
                         </div>
-                        <button
-                            onClick={fetchDashboardData}
-                            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                            title="Refresh"
-                        >
-                            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                        </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Main content */}
-            <div className="max-w-7xl mx-auto px-6 py-8">
-                {/* KPI Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <KPICard
-                        title="Planned Tonnes Today"
-                        value="45,200"
-                        unit="t"
-                        trend={2.5}
-                        icon={Truck}
-                        color="blue"
-                    />
-                    <KPICard
-                        title="Actual vs Plan"
-                        value="92"
-                        unit="%"
-                        trend={-3}
-                        trendLabel="vs yesterday"
-                        icon={TrendingUp}
-                        color="emerald"
-                    />
-                    <KPICard
-                        title="Quality Compliance"
-                        value="96"
-                        unit="%"
-                        trend={1.2}
-                        icon={BarChart3}
-                        color="purple"
-                    />
-                    <KPICard
-                        title="Active Resources"
-                        value="12"
-                        unit="/15"
-                        icon={Factory}
-                        color="amber"
-                    />
-                </div>
+                {/* Main content */}
+                <div className="max-w-7xl mx-auto px-6 py-8">
+                    {/* KPI Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <KPICard
+                            title="Planned Tonnes Today"
+                            value="45,200"
+                            unit="t"
+                            trend={2.5}
+                            icon={Truck}
+                            color="blue"
+                        />
+                        <KPICard
+                            title="Actual vs Plan"
+                            value="92"
+                            unit="%"
+                            trend={-3}
+                            trendLabel="vs yesterday"
+                            icon={TrendingUp}
+                            color="emerald"
+                        />
+                        <KPICard
+                            title="Quality Compliance"
+                            value="96"
+                            unit="%"
+                            trend={1.2}
+                            icon={BarChart3}
+                            color="purple"
+                        />
+                        <KPICard
+                            title="Active Resources"
+                            value="12"
+                            unit="/15"
+                            icon={Factory}
+                            color="amber"
+                        />
+                    </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left column - Schedule & Actions */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Active Schedule Card */}
-                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-                            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <FileText size={20} className="text-blue-400" />
-                                Active Schedule
-                            </h2>
-                            {dashboardData?.activeSchedule ? (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="text-xl font-medium">{dashboardData.activeSchedule.name}</div>
-                                            <div className="text-sm text-slate-400">
-                                                Status: <span className={dashboardData.activeSchedule.status === 'Published' ? 'text-emerald-400' : 'text-amber-400'}>
-                                                    {dashboardData.activeSchedule.status}
-                                                </span>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Left column - Schedule & Actions */}
+                        <div className="lg:col-span-2 space-y-6">
+                            {/* Active Schedule Card */}
+                            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                    <FileText size={20} className="text-blue-400" />
+                                    Active Schedule
+                                </h2>
+                                {dashboardData?.activeSchedule ? (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-xl font-medium">{dashboardData.activeSchedule.name}</div>
+                                                <div className="text-sm text-slate-400">
+                                                    Status: <span className={dashboardData.activeSchedule.status === 'Published' ? 'text-emerald-400' : 'text-amber-400'}>
+                                                        {dashboardData.activeSchedule.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => navigate('/app/planner')}
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
+                                            >
+                                                Open Planner
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-700">
+                                            <div>
+                                                <div className="text-xs text-slate-500">Tasks</div>
+                                                <div className="text-lg font-medium">45</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-slate-500">Horizon</div>
+                                                <div className="text-lg font-medium">14 days</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-slate-500">Last Updated</div>
+                                                <div className="text-lg font-medium">2h ago</div>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => navigate('/app/planner')}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
-                                        >
-                                            Open Planner
-                                        </button>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-700">
-                                        <div>
-                                            <div className="text-xs text-slate-500">Tasks</div>
-                                            <div className="text-lg font-medium">45</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs text-slate-500">Horizon</div>
-                                            <div className="text-lg font-medium">14 days</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs text-slate-500">Last Updated</div>
-                                            <div className="text-lg font-medium">2h ago</div>
-                                        </div>
+                                ) : (
+                                    <div className="text-center py-8 text-slate-500">
+                                        No active schedule. Create one to get started.
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 text-slate-500">
-                                    No active schedule. Create one to get started.
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="space-y-3">
-                            <h2 className="text-lg font-semibold">Quick Actions</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <ActionButton
-                                    icon={Truck}
-                                    label="Fleet Management"
-                                    description="Track equipment status"
-                                    onClick={() => navigate('/app/fleet')}
-                                    primary
-                                />
-                                <ActionButton
-                                    icon={Factory}
-                                    label="Drill & Blast"
-                                    description="Manage patterns"
-                                    onClick={() => navigate('/app/drill-blast')}
-                                />
-                                <ActionButton
-                                    icon={Settings}
-                                    label="Operations"
-                                    description="Shift & production log"
-                                    onClick={() => navigate('/app/operations')}
-                                />
-                                <ActionButton
-                                    icon={TrendingUp}
-                                    label="Monitoring"
-                                    description="Geotech & Environment"
-                                    onClick={() => navigate('/app/monitoring')}
-                                />
+                                )}
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Right column - Alerts & Status */}
-                    <div className="space-y-6">
-                        {/* Alerts */}
-                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-                            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <AlertTriangle size={20} className="text-amber-400" />
-                                Alerts
-                            </h2>
+                            {/* Quick Actions */}
                             <div className="space-y-3">
-                                <AlertCard
-                                    severity="warning"
-                                    title="ROM Stockpile High"
-                                    message="Approaching 90% capacity. Consider increasing reclaim rate."
-                                />
-                                <AlertCard
-                                    severity="info"
-                                    title="Maintenance Window"
-                                    message="EX-03 scheduled for maintenance tomorrow 06:00-14:00"
-                                />
+                                <h2 className="text-lg font-semibold">Quick Actions</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <ActionButton
+                                        icon={Truck}
+                                        label="Fleet Management"
+                                        description="Track equipment status"
+                                        onClick={() => navigate('/app/fleet')}
+                                        primary
+                                    />
+                                    <ActionButton
+                                        icon={Factory}
+                                        label="Drill & Blast"
+                                        description="Manage patterns"
+                                        onClick={() => navigate('/app/drill-blast')}
+                                    />
+                                    <ActionButton
+                                        icon={Settings}
+                                        label="Operations"
+                                        description="Shift & production log"
+                                        onClick={() => navigate('/app/operations')}
+                                    />
+                                    <ActionButton
+                                        icon={TrendingUp}
+                                        label="Monitoring"
+                                        description="Geotech & Environment"
+                                        onClick={() => navigate('/app/monitoring')}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Stockpile Summary */}
-                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-                            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <Package size={20} className="text-emerald-400" />
-                                Stockpiles
-                            </h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <div className="flex justify-between text-sm mb-1">
-                                        <span className="text-slate-400">ROM Stockpile</span>
-                                        <span className="text-amber-400">85%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full" style={{ width: '85%' }} />
-                                    </div>
+                        {/* Right column - Alerts & Status */}
+                        <div className="space-y-6">
+                            {/* Alerts */}
+                            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                    <AlertTriangle size={20} className="text-amber-400" />
+                                    Alerts
+                                </h2>
+                                <div className="space-y-3">
+                                    <AlertCard
+                                        severity="warning"
+                                        title="ROM Stockpile High"
+                                        message="Approaching 90% capacity. Consider increasing reclaim rate."
+                                    />
+                                    <AlertCard
+                                        severity="info"
+                                        title="Maintenance Window"
+                                        message="EX-03 scheduled for maintenance tomorrow 06:00-14:00"
+                                    />
                                 </div>
-                                <div>
-                                    <div className="flex justify-between text-sm mb-1">
-                                        <span className="text-slate-400">Product Coal</span>
-                                        <span className="text-emerald-400">45%</span>
+                            </div>
+
+                            {/* Stockpile Summary */}
+                            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                    <Package size={20} className="text-emerald-400" />
+                                    Stockpiles
+                                </h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="text-slate-400">ROM Stockpile</span>
+                                            <span className="text-amber-400">85%</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full" style={{ width: '85%' }} />
+                                        </div>
                                     </div>
-                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: '45%' }} />
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="text-slate-400">Product Coal</span>
+                                            <span className="text-emerald-400">45%</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: '45%' }} />
+                                        </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between text-sm mb-1">
-                                        <span className="text-slate-400">Reject</span>
-                                        <span className="text-blue-400">30%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" style={{ width: '30%' }} />
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="text-slate-400">Reject</span>
+                                            <span className="text-blue-400">30%</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" style={{ width: '30%' }} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -370,7 +373,7 @@ const SiteDashboard = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </AppLayout>
     );
 };
 

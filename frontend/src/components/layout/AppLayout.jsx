@@ -104,6 +104,7 @@ const navSections = [
         items: [
             { id: 'import', label: 'Import Data', icon: Upload, route: '/app/planner' },
             { id: 'integrations', label: 'Integrations', icon: Link, route: '/app/planner' },
+            { id: 'seed-data', label: 'Seed Demo Data', icon: Database, route: '/app/seed-data', highlight: true },
             { id: 'settings', label: 'Settings', icon: Settings, route: '/app/planner' },
         ],
     },
@@ -118,9 +119,11 @@ function NavItem({ item, active, collapsed, onClick }) {
             className={clsx(
                 'w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all duration-200',
                 'relative group',
-                active
-                    ? 'text-primary-400 bg-primary-500/10'
-                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                item.highlight
+                    ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                    : active
+                        ? 'text-primary-400 bg-primary-500/10'
+                        : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
             )}
         >
             {/* Active indicator */}
@@ -131,7 +134,14 @@ function NavItem({ item, active, collapsed, onClick }) {
             <Icon size={18} className="flex-shrink-0" />
 
             {!collapsed && (
-                <span className="truncate">{item.label}</span>
+                <>
+                    <span className="truncate">{item.label}</span>
+                    {item.highlight && (
+                        <span className="ml-auto px-1.5 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 rounded font-semibold">
+                            NEW
+                        </span>
+                    )}
+                </>
             )}
 
             {/* Tooltip for collapsed state */}
@@ -258,11 +268,11 @@ export function AppHeader({
     scheduleVersion,
     scheduleVersions = [],
     onScheduleChange,
-    onSeedData,
     onRunSchedule,
     loading = false,
 }) {
     const { toggleTheme, theme } = useApp();
+    const navigate = useNavigate();
 
     return (
         <header className="h-14 border-b border-neutral-800 flex items-center justify-between px-6 bg-neutral-950/50 backdrop-blur-sm">
@@ -316,11 +326,11 @@ export function AppHeader({
 
                 {/* Seed Data Button */}
                 <button
-                    onClick={onSeedData}
-                    disabled={loading}
-                    className="px-3 py-1.5 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+                    onClick={() => navigate('/app/seed-data')}
+                    className="px-3 py-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1.5"
                 >
-                    Initialize Demo
+                    <Database size={14} />
+                    Seed Demo Data
                 </button>
 
                 {/* Run Schedule Button */}

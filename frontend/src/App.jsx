@@ -8,6 +8,7 @@ import FleetDashboard from './pages/FleetDashboard';
 import DrillBlastDashboard from './pages/DrillBlastDashboard';
 import OperationsDashboard from './pages/OperationsDashboard';
 import MonitoringDashboard from './pages/MonitoringDashboard';
+import SeedDataPage from './pages/SeedDataPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { SiteProvider } from './context/SiteContext';
 import { ToastProvider } from './context/ToastContext';
@@ -132,6 +133,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MonitoringDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/app/seed-data"
+              element={
+                <ProtectedRoute>
+                  <SeedDataPage />
                 </ProtectedRoute>
               }
             />

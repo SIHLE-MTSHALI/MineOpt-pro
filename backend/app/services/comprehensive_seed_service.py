@@ -303,23 +303,35 @@ def seed_equipment(db: Session, site, site_config):
     
     equipment_list = []
     
+    # Map string types to EquipmentType enum values
+    type_map = {
+        "haul_truck": models_fleet.EquipmentType.HAUL_TRUCK,
+        "excavator": models_fleet.EquipmentType.EXCAVATOR,
+        "dozer": models_fleet.EquipmentType.DOZER,
+        "drill_rig": models_fleet.EquipmentType.DRILL_RIG,
+        "grader": models_fleet.EquipmentType.GRADER,
+        "water_cart": models_fleet.EquipmentType.WATER_CART,
+        "front_end_loader": models_fleet.EquipmentType.FRONT_END_LOADER,
+        "light_vehicle": models_fleet.EquipmentType.LIGHT_VEHICLE,
+    }
+    
     for eq_type, count in counts.items():
         templates = EQUIPMENT_TEMPLATES.get(eq_type, [])
         for i in range(count):
-            template = random.choice(templates)
+            template = random.choice(templates) if templates else {"model": "Generic Equipment"}
             fleet_num = generate_fleet_number(eq_type, i, site_abbr)
             
-            # Random commission date (1-10 years ago)
+            # Random commission year (1-10 years ago)
             years_old = random.randint(1, 10)
-            commission_date = datetime.now() - timedelta(days=365 * years_old)
+            commission_year = datetime.now().year - years_old
             
             # Random status with realistic distribution
             status_weights = {
-                "operating": 0.70,
-                "standby": 0.15,
-                "maintenance": 0.10,
-                "breakdown": 0.03,
-                "refueling": 0.02
+                models_fleet.EquipmentStatus.OPERATING: 0.70,
+                models_fleet.EquipmentStatus.STANDBY: 0.15,
+                models_fleet.EquipmentStatus.MAINTENANCE: 0.10,
+                models_fleet.EquipmentStatus.BREAKDOWN: 0.03,
+                models_fleet.EquipmentStatus.REFUELING: 0.02
             }
             status = random.choices(
                 list(status_weights.keys()),
@@ -329,11 +341,12 @@ def seed_equipment(db: Session, site, site_config):
             eq = models_fleet.Equipment(
                 site_id=site.site_id,
                 fleet_number=fleet_num,
-                equipment_type=eq_type,
-                make=template["model"].split()[0],
+                name=f"{template['model']} {fleet_num}",
+                equipment_type=type_map.get(eq_type, models_fleet.EquipmentType.OTHER),
+                manufacturer=template["model"].split()[0],
                 model=template["model"],
                 status=status,
-                commissioned_date=commission_date,
+                year=commission_year,
                 engine_hours=random.randint(5000, 50000),
                 current_operator_id=None
             )
@@ -344,14 +357,22 @@ def seed_equipment(db: Session, site, site_config):
     return equipment_list
 
 
+
 def seed_gps_readings(db: Session, equipment_list, site_config, sample_rate_minutes=30):
     """Generate GPS readings for equipment over 3 months."""
     readings = []
     base_lat = site_config["location"]["lat"]
     base_lon = site_config["location"]["lon"]
     
-    # Only generate for mobile equipment
-    mobile_types = ["haul_truck", "excavator", "dozer", "water_cart", "grader", "light_vehicle"]
+    # Only generate for mobile equipment (using enum values)
+    mobile_types = [
+        models_fleet.EquipmentType.HAUL_TRUCK,
+        models_fleet.EquipmentType.EXCAVATOR,
+        models_fleet.EquipmentType.DOZER,
+        models_fleet.EquipmentType.WATER_CART,
+        models_fleet.EquipmentType.GRADER,
+        models_fleet.EquipmentType.LIGHT_VEHICLE
+    ]
     mobile_equipment = [e for e in equipment_list if e.equipment_type in mobile_types]
     
     # Generate readings at reduced frequency for performance
@@ -366,7 +387,7 @@ def seed_gps_readings(db: Session, equipment_list, site_config, sample_rate_minu
         pos = random_position_in_pit(base_lat, base_lon)
         heading = random.uniform(0, 360)
         
-        interval_minutes = 30 if eq.equipment_type == "haul_truck" else 60
+        interval_minutes = 30 if eq.equipment_type == models_fleet.EquipmentType.HAUL_TRUCK else 60
         
         while current_time <= END_DATE and eq_readings < max_readings_per_equipment:
             # Simulate movement
@@ -377,17 +398,17 @@ def seed_gps_readings(db: Session, equipment_list, site_config, sample_rate_minu
                 pos["elevation"] += random.uniform(-2, 2)
                 heading = (heading + random.uniform(-30, 30)) % 360
             
-            speed = 0 if eq.equipment_type == "excavator" else random.uniform(0, 40)
+            speed = 0 if eq.equipment_type == models_fleet.EquipmentType.EXCAVATOR else random.uniform(0, 40)
             
             reading = models_fleet.GPSReading(
                 equipment_id=eq.equipment_id,
                 timestamp=current_time,
                 latitude=pos["latitude"],
                 longitude=pos["longitude"],
-                elevation=pos["elevation"],
+                altitude=pos["elevation"],
                 heading=heading,
                 speed_kmh=speed,
-                satellites=random.randint(8, 14),
+                num_satellites=random.randint(8, 14),
                 hdop=random.uniform(0.8, 2.0)
             )
             readings.append(reading)
@@ -409,7 +430,7 @@ def seed_gps_readings(db: Session, equipment_list, site_config, sample_rate_minu
 
 def seed_haul_cycles(db: Session, equipment_list, site, materials, periods):
     """Generate haul cycle data for trucks."""
-    trucks = [e for e in equipment_list if e.equipment_type == "haul_truck"]
+    trucks = [e for e in equipment_list if e.equipment_type == models_fleet.EquipmentType.HAUL_TRUCK]
     cycles = []
     
     for period in periods[:180]:  # First 90 days × 2 shifts
@@ -422,15 +443,15 @@ def seed_haul_cycles(db: Session, equipment_list, site, materials, periods):
             for cycle_num in range(num_cycles):
                 cycle_start = shift_start + timedelta(minutes=random.randint(0, 600))
                 
-                # Realistic cycle times
-                queue_time = random.uniform(1, 8)
-                load_time = random.uniform(3, 6)
-                haul_time = random.uniform(8, 20)
-                dump_time = random.uniform(2, 4)
-                return_time = haul_time * 0.8  # Return faster (empty)
+                # Realistic cycle times (in seconds for model)
+                queue_time_sec = random.uniform(60, 480)  # 1-8 min
+                load_time_sec = random.uniform(180, 360)   # 3-6 min
+                haul_time_sec = random.uniform(480, 1200)   # 8-20 min
+                dump_time_sec = random.uniform(120, 240)    # 2-4 min
+                return_time_sec = haul_time_sec * 0.8  # Return faster (empty)
                 
-                total_cycle = queue_time + load_time + haul_time + dump_time + return_time
-                cycle_end = cycle_start + timedelta(minutes=total_cycle)
+                total_cycle_sec = queue_time_sec + load_time_sec + haul_time_sec + dump_time_sec + return_time_sec
+                cycle_end = cycle_start + timedelta(seconds=total_cycle_sec)
                 
                 # Random payload (90-105% of rated capacity)
                 payload = truck.model.split()[-1] if hasattr(truck, 'model') else 200
@@ -443,20 +464,29 @@ def seed_haul_cycles(db: Session, equipment_list, site, materials, periods):
                 # Material type (70% waste, 30% coal)
                 is_coal = random.random() < 0.30
                 
+                # Calculate distance (assuming ~30 km/h average speed)
+                haul_distance = (haul_time_sec / 3600) * 30  # km
+                return_distance = (return_time_sec / 3600) * 35  # km
+                
                 cycle = models_fleet.HaulCycle(
                     equipment_id=truck.equipment_id,
+                    site_id=site.site_id,
                     cycle_start=cycle_start,
                     cycle_end=cycle_end,
-                    source_location=f"Pit {random.randint(1, 3)}",
-                    destination_location="ROM Pad" if is_coal else f"Dump {random.randint(1, 4)}",
+                    source_name=f"Pit {random.randint(1, 3)}",
+                    destination_name="ROM Pad" if is_coal else f"Dump {random.randint(1, 4)}",
                     material_type="ROM Coal" if is_coal else "Overburden",
                     payload_tonnes=round(actual_payload, 1),
-                    queue_time_minutes=round(queue_time, 1),
-                    load_time_minutes=round(load_time, 1),
-                    haul_time_minutes=round(haul_time, 1),
-                    dump_time_minutes=round(dump_time, 1),
-                    return_time_minutes=round(return_time, 1),
-                    distance_km=round(haul_time * 0.5, 1)  # ~30 km/h average
+                    queue_at_loader_sec=round(queue_time_sec, 1),
+                    loading_sec=round(load_time_sec, 1),
+                    travel_loaded_sec=round(haul_time_sec, 1),
+                    queue_at_dump_sec=round(queue_time_sec * 0.3, 1),
+                    dumping_sec=round(dump_time_sec, 1),
+                    travel_empty_sec=round(return_time_sec, 1),
+                    total_cycle_sec=round(total_cycle_sec, 1),
+                    travel_loaded_km=round(haul_distance, 1),
+                    travel_empty_km=round(return_distance, 1),
+                    total_distance_km=round(haul_distance + return_distance, 1)
                 )
                 cycles.append(cycle)
     
@@ -466,6 +496,8 @@ def seed_haul_cycles(db: Session, equipment_list, site, materials, periods):
         db.flush()
     
     return len(cycles)
+
+
 
 
 def seed_blast_patterns(db: Session, site, site_config):
@@ -483,28 +515,47 @@ def seed_blast_patterns(db: Session, site, site_config):
         # Status progression based on age
         days_old = (END_DATE - created_at).days
         if days_old > 21:
-            status = "blasted"
+            status = "fired"
         elif days_old > 14:
-            status = "charged"
+            status = "loaded"
         elif days_old > 7:
             status = "drilled"
         else:
-            status = "designed"
+            status = "approved"
+        
+        # Pattern dimensions
+        burden = random.uniform(4.5, 6.0)
+        spacing = random.uniform(5.0, 7.0)
+        num_rows = random.randint(4, 8)
+        num_holes_per_row = random.randint(10, 20)
+        hole_depth = random.uniform(12, 18)
         
         pattern = models_drill_blast.BlastPattern(
             site_id=site.site_id,
-            pattern_name=f"BP-{created_at.strftime('%Y%m%d')}-{i+1:03d}",
-            bench_level=random.choice(["2850RL", "2840RL", "2830RL", "2820RL"]),
+            bench_name=random.choice(["2850RL", "2840RL", "2830RL", "2820RL"]),
+            block_name=f"Block-{created_at.strftime('%Y%m%d')}-{i+1:03d}",
+            pattern_type="rectangular",
             status=status,
             designed_by="Chief Drill & Blast Engineer",
-            designed_date=created_at,
-            burden_m=random.uniform(4.5, 6.0),
-            spacing_m=random.uniform(5.0, 7.0),
-            hole_diameter_mm=random.choice([270, 311]),
-            expected_fragmentation_p80=random.uniform(0.3, 0.6),
-            explosive_type=random.choice(["ANFO", "Emulsion", "Heavy ANFO"]),
-            total_explosives_kg=random.randint(5000, 25000),
-            total_volume_bcm=random.randint(50000, 200000)
+            designed_at=created_at,
+            burden=burden,
+            spacing=spacing,
+            num_rows=num_rows,
+            num_holes_per_row=num_holes_per_row,
+            hole_diameter_mm=random.choice([270.0, 311.0]),
+            hole_depth_m=hole_depth,
+            subdrill_m=0.5,
+            stemming_height_m=3.0,
+            explosive_type=random.choice([
+                models_drill_blast.ExplosiveType.ANFO,
+                models_drill_blast.ExplosiveType.EMULSION,
+                models_drill_blast.ExplosiveType.HEAVY_ANFO
+            ]),
+            powder_factor_kg_bcm=random.uniform(0.3, 0.6),
+            orientation_degrees=random.uniform(0, 90),
+            origin_x=1000.0,
+            origin_y=2000.0,
+            origin_z=float(random.choice([2850, 2840, 2830, 2820]))
         )
         patterns.append(pattern)
     
@@ -513,35 +564,61 @@ def seed_blast_patterns(db: Session, site, site_config):
     
     # Generate holes for each pattern
     for pattern in patterns:
-        num_holes = random.randint(60, 180)
-        for h in range(num_holes):
-            row = h // 15
-            col = h % 15
+        total_holes = pattern.num_rows * pattern.num_holes_per_row
+        for h in range(total_holes):
+            row = h // pattern.num_holes_per_row
+            col = h % pattern.num_holes_per_row
+            
+            # Determine hole status based on pattern status
+            if pattern.status == "fired":
+                hole_status = models_drill_blast.DrillHoleStatus.DETONATED
+            elif pattern.status == "loaded":
+                hole_status = models_drill_blast.DrillHoleStatus.LOADED
+            elif pattern.status == "drilled":
+                hole_status = models_drill_blast.DrillHoleStatus.DRILLED
+            else:
+                hole_status = models_drill_blast.DrillHoleStatus.PLANNED
             
             hole = models_drill_blast.DrillHole(
                 pattern_id=pattern.pattern_id,
-                hole_number=f"H{h+1:03d}",
-                easting=1000 + col * pattern.spacing_m,
-                northing=2000 + row * pattern.burden_m,
-                collar_rl=float(pattern.bench_level.replace("RL", "")) if "RL" in pattern.bench_level else 2850,
-                designed_depth=random.uniform(12, 18),
-                actual_depth=random.uniform(11.5, 18.5) if pattern.status != "designed" else None,
-                hole_status="drilled" if pattern.status in ["drilled", "charged", "blasted"] else "designed",
-                water_depth=random.uniform(0, 3) if random.random() < 0.3 else None
+                hole_number=h + 1,  # Integer, not string
+                row_number=row + 1,
+                hole_in_row=col + 1,
+                design_x=pattern.origin_x + col * pattern.spacing,
+                design_y=pattern.origin_y + row * pattern.burden,
+                design_z=pattern.origin_z,
+                design_depth_m=pattern.hole_depth_m,
+                design_angle_degrees=90,  # Vertical
+                design_diameter_mm=pattern.hole_diameter_mm,
+                actual_depth_m=pattern.hole_depth_m * random.uniform(0.95, 1.05) if pattern.status != "approved" else None,
+                status=hole_status,
+                water_present=random.random() < 0.15,  # 15% chance of water
+                charge_weight_kg=random.uniform(80, 150) if hole_status in [models_drill_blast.DrillHoleStatus.LOADED, models_drill_blast.DrillHoleStatus.DETONATED] else None
             )
             holes.append(hole)
         
-        # Create blast event if pattern was blasted
-        if pattern.status == "blasted":
-            blast_date = pattern.designed_date + timedelta(days=random.randint(14, 21))
+        # Create blast event if pattern was fired
+        if pattern.status == "fired":
+            blast_date = pattern.designed_at + timedelta(days=random.randint(14, 21))
             event = models_drill_blast.BlastEvent(
                 pattern_id=pattern.pattern_id,
-                blast_datetime=blast_date,
-                blast_engineer="Senior Blast Engineer",
-                weather_conditions=random.choice(["Clear", "Overcast", "Light Wind", "Windy"]),
-                actual_fragmentation_p80=pattern.expected_fragmentation_p80 * random.uniform(0.9, 1.2),
-                vibration_ppv=random.uniform(2, 15),
-                overpressure_db=random.uniform(115, 135),
+                site_id=site.site_id,
+                blast_number=f"BLAST-{blast_date.strftime('%Y%m%d')}-{i+1:03d}",
+                blast_date=blast_date,
+                scheduled_time=blast_date,
+                actual_fire_time=blast_date + timedelta(minutes=random.randint(-10, 30)),
+                total_holes=total_holes,
+                total_explosive_kg=random.randint(5000, 25000),
+                total_volume_bcm=random.randint(50000, 200000),
+                powder_factor_kg_bcm=random.uniform(0.3, 0.6),
+                wind_speed_kmh=random.uniform(5, 25),
+                wind_direction=random.choice(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]),
+                max_ppv_mm_s=random.uniform(2, 15),
+                max_overpressure_db=random.uniform(115, 135),
+                avg_fragment_size_cm=random.uniform(20, 50),
+                fragmentation_rating=random.choice(["good", "acceptable", "poor"]),
+                shotfirer_name="Senior Blast Engineer",
+                status="completed",
                 notes="Blast completed as planned" if random.random() > 0.1 else "Minor deviation from plan"
             )
             events.append(event)
@@ -551,6 +628,7 @@ def seed_blast_patterns(db: Session, site, site_config):
     db.flush()
     
     return len(patterns), len(holes), len(events)
+
 
 
 def seed_shifts_and_tickets(db: Session, site, periods, materials):
@@ -632,17 +710,26 @@ def seed_geotechnical_data(db: Session, site, site_config):
     num_prisms = random.randint(12, 15)
     
     for i in range(num_prisms):
+        # Generate position
+        initial_x = random.uniform(1000, 2000)
+        initial_y = random.uniform(2000, 3000)
+        initial_z = random.uniform(2800, 2900)
+        
         prism = models_geotech_safety.SlopeMonitoringPrism(
             site_id=site.site_id,
             prism_name=f"PRS-{i+1:03d}",
-            location_easting=random.uniform(1000, 2000),
-            location_northing=random.uniform(2000, 3000),
-            location_rl=random.uniform(2800, 2900),
-            install_date=START_DATE - timedelta(days=random.randint(30, 365)),
-            status="active",
-            monitoring_frequency="daily",
-            alert_threshold_mm=25.0,
-            critical_threshold_mm=50.0
+            location=f"Bench {int(initial_z // 10) * 10}",
+            initial_x=initial_x,
+            initial_y=initial_y,
+            initial_z=initial_z,
+            current_x=initial_x,
+            current_y=initial_y,
+            current_z=initial_z,
+            installed_at=START_DATE - timedelta(days=random.randint(30, 365)),
+            warning_threshold_mm=25.0,
+            critical_threshold_mm=50.0,
+            alert_status="normal",
+            is_active=True
         )
         prisms.append(prism)
     
@@ -674,15 +761,15 @@ def seed_geotechnical_data(db: Session, site, site_config):
             
             reading = models_geotech_safety.PrismReading(
                 prism_id=prism.prism_id,
-                timestamp=reading_time,
-                easting=prism.location_easting + base_x/1000,  # Convert mm to m
-                northing=prism.location_northing + base_y/1000,
-                rl=prism.location_rl + base_z/1000,
-                delta_x_mm=dx,
-                delta_y_mm=dy,
-                delta_z_mm=dz,
-                cumulative_displacement_mm=round(cumulative_displacement, 1),
-                velocity_mm_per_day=round(math.sqrt(dx**2 + dy**2 + dz**2), 2)
+                measured_at=reading_time,
+                x=prism.initial_x + base_x/1000,  # Convert mm to m
+                y=prism.initial_y + base_y/1000,
+                z=prism.initial_z + base_z/1000,
+                delta_x=dx,
+                delta_y=dy,
+                delta_z=dz,
+                total_displacement_mm=round(cumulative_displacement, 1),
+                displacement_rate_mm_day=round(math.sqrt(dx**2 + dy**2 + dz**2), 2)
             )
             readings.append(reading)
     
@@ -692,6 +779,7 @@ def seed_geotechnical_data(db: Session, site, site_config):
     return len(prisms), len(readings)
 
 
+
 def seed_environmental_data(db: Session, site, site_config):
     """Generate dust monitoring and environmental data."""
     monitors = []
@@ -699,18 +787,19 @@ def seed_environmental_data(db: Session, site, site_config):
     
     # 4 dust monitors per site
     monitor_locations = ["North Boundary", "South Pit Edge", "ROM Pad", "Main Haul Road"]
+    wind_directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     
     for i, location in enumerate(monitor_locations):
         monitor = models_geotech_safety.DustMonitor(
             site_id=site.site_id,
-            monitor_name=f"DM-{i+1:02d}",
-            location_description=location,
-            latitude=site_config["location"]["lat"] + random.uniform(-0.01, 0.01),
-            longitude=site_config["location"]["lon"] + random.uniform(-0.01, 0.01),
-            install_date=START_DATE - timedelta(days=180),
-            status="active",
-            pm10_limit=150,  # µg/m³
-            pm25_limit=25
+            name=f"DM-{i+1:02d}",
+            location=location,
+            monitor_type="continuous",
+            easting=random.uniform(1000, 2000),
+            northing=random.uniform(2000, 3000),
+            pm10_threshold_ug_m3=150,  # µg/m³
+            pm25_threshold_ug_m3=25,
+            is_active=True
         )
         monitors.append(monitor)
     
@@ -741,12 +830,14 @@ def seed_environmental_data(db: Session, site, site_config):
             reading = models_geotech_safety.DustReading(
                 monitor_id=monitor.monitor_id,
                 measured_at=current_time,
-                pm10=round(base_pm10, 1),
-                pm25=round(base_pm25, 1),
+                pm10_ug_m3=round(base_pm10, 1),
+                pm25_ug_m3=round(base_pm25, 1),
+                pm10_exceeded=base_pm10 > monitor.pm10_threshold_ug_m3,
+                pm25_exceeded=base_pm25 > monitor.pm25_threshold_ug_m3,
                 temperature_c=random.uniform(15, 35),
                 humidity_percent=random.uniform(30, 80),
-                wind_speed_ms=random.uniform(0, 15),
-                wind_direction=random.uniform(0, 360)
+                wind_speed_kmh=random.uniform(0, 50),
+                wind_direction=random.choice(wind_directions)
             )
             readings.append(reading)
             
@@ -756,6 +847,7 @@ def seed_environmental_data(db: Session, site, site_config):
     db.flush()
     
     return len(monitors), len(readings)
+
 
 
 def seed_flow_network(db: Session, site, materials):
@@ -771,14 +863,12 @@ def seed_flow_network(db: Session, site, materials):
     nodes = [
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Source",
             name="Active Pit",
             location_geometry={"position": [0, 0, 0]}
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Stockpile",
             name="ROM Pad A",
             location_geometry={"position": [500, 0, 50]},
@@ -786,7 +876,6 @@ def seed_flow_network(db: Session, site, materials):
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Stockpile",
             name="ROM Pad B",
             location_geometry={"position": [600, 100, 50]},
@@ -794,15 +883,13 @@ def seed_flow_network(db: Session, site, materials):
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="WashPlant",
             name="CHPP",
             location_geometry={"position": [800, 50, 60]},
-            capacity_tonnes_per_hour=2500
+            capacity_tonnes=50000
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Stockpile",
             name="Product Stockpile",
             location_geometry={"position": [1000, 0, 70]},
@@ -810,14 +897,12 @@ def seed_flow_network(db: Session, site, materials):
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Dump",
             name="Waste Dump North",
             location_geometry={"position": [-200, 300, -30]}
         ),
         models_flow.FlowNode(
             network_id=network.network_id,
-            site_id=site.site_id,
             node_type="Dump",
             name="Waste Dump South",
             location_geometry={"position": [-200, -300, -30]}
@@ -899,7 +984,28 @@ def seed_activity_areas(db: Session, site, activity):
 
 def seed_all(db: Session):
     """Main function to seed all comprehensive demo data."""
-    print("Starting comprehensive demo data seeding...")
+    import sys
+    
+    def log_progress(step, total, message):
+        """Print progress with visual bar."""
+        percent = int((step / total) * 100)
+        bar_width = 30
+        filled = int(bar_width * step / total)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        print(f"\r[{bar}] {percent:3d}% | Step {step}/{total}: {message}", end="", flush=True)
+        if step == total:
+            print()  # Newline at end
+    
+    total_steps = 33  # 11 steps per site × 3 sites
+    current_step = 0
+    
+    print("\n" + "="*60)
+    print("🏗️  COMPREHENSIVE DEMO DATA SEEDING")
+    print("="*60)
+    print(f"📅 Generating {DAYS_OF_DATA} days of operational data...")
+    print(f"🏭 Creating {len(COAL_SITES)} coal mining sites...")
+    print("="*60 + "\n")
+    
     results = {
         "sites": [],
         "equipment_count": 0,
@@ -915,11 +1021,18 @@ def seed_all(db: Session):
     # Seed each site
     sites = seed_sites(db)
     
-    for site, config in sites:
-        print(f"Seeding data for: {config['name']}")
+    for site_idx, (site, config) in enumerate(sites):
+        print(f"\n📍 Site {site_idx + 1}/3: {config['name']}")
+        print("-" * 50)
         
-        # Core configuration
+        # Step 1: Core configuration
+        current_step += 1
+        log_progress(current_step, total_steps, f"Materials & qualities")
         materials = seed_materials_and_qualities(db, site)
+        
+        # Step 2: Calendar
+        current_step += 1
+        log_progress(current_step, total_steps, f"Calendar ({DAYS_OF_DATA} days)")
         calendar, periods = seed_calendar(db, site)
         
         # Activity for mining
@@ -931,40 +1044,65 @@ def seed_all(db: Session):
         db.add(activity)
         db.flush()
         
-        # Activity areas (blocks)
+        # Step 3: Activity areas (blocks)
+        current_step += 1
+        log_progress(current_step, total_steps, f"Mining blocks (16 blocks)")
         areas = seed_activity_areas(db, site, activity)
         
-        # Flow network
+        # Step 4: Flow network
+        current_step += 1
+        log_progress(current_step, total_steps, f"Flow network & nodes")
         network, nodes = seed_flow_network(db, site, materials)
         
-        # Equipment
+        # Step 5: Equipment
+        current_step += 1
+        log_progress(current_step, total_steps, f"Equipment fleet")
         equipment = seed_equipment(db, site, config)
         results["equipment_count"] += len(equipment)
+        print(f" → {len(equipment)} pieces")
         
-        # GPS Readings
+        # Step 6: GPS Readings
+        current_step += 1
+        log_progress(current_step, total_steps, f"GPS readings")
         gps_count = seed_gps_readings(db, equipment, config)
         results["gps_readings"] += gps_count
+        print(f" → {gps_count:,} readings")
         
-        # Haul Cycles
+        # Step 7: Haul Cycles
+        current_step += 1
+        log_progress(current_step, total_steps, f"Haul cycles")
         cycle_count = seed_haul_cycles(db, equipment, site, materials, periods)
         results["haul_cycles"] += cycle_count
+        print(f" → {cycle_count:,} cycles")
         
-        # Blast Patterns
+        # Step 8: Blast Patterns
+        current_step += 1
+        log_progress(current_step, total_steps, f"Blast patterns & holes")
         patterns, holes, events = seed_blast_patterns(db, site, config)
         results["blast_patterns"] += patterns
+        print(f" → {patterns} patterns, {holes:,} holes")
         
-        # Shifts and Tickets
+        # Step 9: Shifts and Tickets
+        current_step += 1
+        log_progress(current_step, total_steps, f"Shifts & load tickets")
         shift_count, ticket_count = seed_shifts_and_tickets(db, site, periods, materials)
         results["shifts"] += shift_count
         results["load_tickets"] += ticket_count
+        print(f" → {shift_count} shifts, {ticket_count:,} tickets")
         
-        # Geotechnical
+        # Step 10: Geotechnical
+        current_step += 1
+        log_progress(current_step, total_steps, f"Prism monitoring data")
         prisms, prism_readings = seed_geotechnical_data(db, site, config)
         results["prism_readings"] += prism_readings
+        print(f" → {prisms} prisms, {prism_readings:,} readings")
         
-        # Environmental
+        # Step 11: Environmental
+        current_step += 1
+        log_progress(current_step, total_steps, f"Environmental monitoring")
         monitors, dust_readings = seed_environmental_data(db, site, config)
         results["dust_readings"] += dust_readings
+        print(f" → {monitors} monitors, {dust_readings:,} readings")
         
         # Schedule
         schedule = seed_schedule_and_tasks(db, site, periods, areas)
@@ -975,8 +1113,24 @@ def seed_all(db: Session):
         })
         
         db.flush()
+        print(f"✅ {config['name']} complete!\n")
     
     db.commit()
-    print("Comprehensive demo data seeding complete!")
+    
+    # Final summary
+    print("\n" + "="*60)
+    print("🎉 SEEDING COMPLETE!")
+    print("="*60)
+    print(f"   Sites created:      {len(results['sites'])}")
+    print(f"   Equipment:          {results['equipment_count']:,}")
+    print(f"   GPS readings:       {results['gps_readings']:,}")
+    print(f"   Haul cycles:        {results['haul_cycles']:,}")
+    print(f"   Blast patterns:     {results['blast_patterns']}")
+    print(f"   Shifts:             {results['shifts']}")
+    print(f"   Load tickets:       {results['load_tickets']:,}")
+    print(f"   Prism readings:     {results['prism_readings']:,}")
+    print(f"   Dust readings:      {results['dust_readings']:,}")
+    print("="*60 + "\n")
     
     return results
+

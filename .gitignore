@@ -16,3 +16,4 @@ dist/
 # Project Specific
 data/
 *.log
+backend/mineopt_pro.db
