@@ -1,132 +1,445 @@
-import React from 'react';
+/**
+ * Sidebar.jsx - Unified Navigation Sidebar
+ * 
+ * Professional-grade navigation component providing:
+ * - Route-based navigation using React Router
+ * - URL query params for PlannerWorkspace tabs
+ * - Site selection with context integration
+ * - Active state highlighting
+ * - Collapsible design
+ * - User authentication display
+ * 
+ * @module components/ui/Sidebar
+ */
+
+import React, { useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { clsx } from 'clsx';
 import {
     Box, Layers, Calendar, Truck, Settings, Database,
     GitBranch, Package, Zap, BarChart2, Target, Wind,
-    Mountain, Upload, Link, ClipboardList, Home, LogOut, ChevronDown
+    Mountain, Upload, Link, ClipboardList, Home, LogOut,
+    ChevronDown, ChevronLeft, ChevronRight, Sparkles
 } from 'lucide-react';
-import { clsx } from 'clsx';
-import { useNavigate } from 'react-router-dom';
 import { useSite } from '../../context/SiteContext';
 
-const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
+// =============================================================================
+// NAVIGATION CONFIGURATION
+// =============================================================================
+
+/**
+ * Navigation sections with items
+ * Each item can either:
+ * - Navigate to a dedicated route (path)
+ * - Navigate to PlannerWorkspace with a tab param (plannerTab)
+ */
+const NAV_SECTIONS = [
+    {
+        title: 'Home',
+        items: [
+            {
+                id: 'dashboard',
+                label: 'Dashboard',
+                icon: Home,
+                path: '/app/dashboard'
+            }
+        ]
+    },
+    {
+        title: 'Planning',
+        items: [
+            {
+                id: 'spatial',
+                label: '3D Spatial View',
+                icon: Box,
+                plannerTab: 'spatial'
+            },
+            {
+                id: 'gantt',
+                label: 'Gantt Schedule',
+                icon: Calendar,
+                plannerTab: 'gantt'
+            },
+            {
+                id: 'schedule-control',
+                label: 'Schedule Control',
+                icon: Zap,
+                plannerTab: 'schedule-control'
+            },
+            {
+                id: 'reporting',
+                label: 'Reports & Analytics',
+                icon: BarChart2,
+                plannerTab: 'reporting'
+            }
+        ]
+    },
+    {
+        title: 'Operations',
+        items: [
+            {
+                id: 'fleet',
+                label: 'Fleet Management',
+                icon: Truck,
+                path: '/app/fleet'
+            },
+            {
+                id: 'drill-blast',
+                label: 'Drill & Blast',
+                icon: Target,
+                path: '/app/drill-blast'
+            },
+            {
+                id: 'operations',
+                label: 'Shift Operations',
+                icon: ClipboardList,
+                path: '/app/operations'
+            }
+        ]
+    },
+    {
+        title: 'Monitoring',
+        items: [
+            {
+                id: 'geotech',
+                label: 'Slope Stability',
+                icon: Mountain,
+                path: '/app/monitoring',
+                tabHint: 'geotech'
+            },
+            {
+                id: 'environment',
+                label: 'Environment',
+                icon: Wind,
+                path: '/app/monitoring',
+                tabHint: 'environment'
+            }
+        ]
+    },
+    {
+        title: 'Configuration',
+        items: [
+            {
+                id: 'flow-editor',
+                label: 'Flow Network',
+                icon: GitBranch,
+                plannerTab: 'flow-editor'
+            },
+            {
+                id: 'product-specs',
+                label: 'Product Specs',
+                icon: Package,
+                plannerTab: 'product-specs'
+            },
+            {
+                id: 'data',
+                label: 'Stockpiles',
+                icon: Database,
+                plannerTab: 'data'
+            },
+            {
+                id: 'resources',
+                label: 'Wash Plant',
+                icon: Layers,
+                plannerTab: 'resources'
+            },
+            {
+                id: 'geology',
+                label: 'Block Model',
+                icon: Layers,
+                plannerTab: 'geology'
+            }
+        ]
+    },
+    {
+        title: 'Data & Integration',
+        items: [
+            {
+                id: 'import',
+                label: 'Import Data',
+                icon: Upload,
+                plannerTab: 'import'
+            },
+            {
+                id: 'integrations',
+                label: 'Integrations',
+                icon: Link,
+                plannerTab: 'integrations'
+            },
+            {
+                id: 'seed-data',
+                label: 'Seed Demo Data',
+                icon: Sparkles,
+                path: '/app/seed-data',
+                highlight: true
+            },
+            {
+                id: 'settings',
+                label: 'Settings',
+                icon: Settings,
+                plannerTab: 'settings'
+            }
+        ]
+    }
+];
+
+// =============================================================================
+// SIDEBAR ITEM COMPONENT
+// =============================================================================
+
+/**
+ * Individual navigation item
+ */
+const SidebarItem = ({ icon: Icon, label, active, onClick, highlight, collapsed }) => (
     <button
         onClick={onClick}
         className={clsx(
-            "w-full flex items-center space-x-3 px-4 py-3 text-sm font-medium transition-colors",
-            active ? "bg-slate-800 text-blue-400 border-r-2 border-blue-400" : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            'w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all duration-200 relative group',
+            highlight
+                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                : active
+                    ? 'text-blue-400 bg-blue-500/10'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
         )}
     >
-        <Icon size={18} />
-        <span>{label}</span>
+        {/* Active indicator */}
+        {active && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-blue-400 rounded-r" />
+        )}
+
+        <Icon size={18} className="flex-shrink-0" />
+
+        {!collapsed && (
+            <>
+                <span className="truncate">{label}</span>
+                {highlight && (
+                    <span className="ml-auto px-1.5 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 rounded font-semibold">
+                        NEW
+                    </span>
+                )}
+            </>
+        )}
+
+        {/* Tooltip for collapsed state */}
+        {collapsed && (
+            <span className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity shadow-lg">
+                {label}
+            </span>
+        )}
     </button>
 );
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+// =============================================================================
+// MAIN SIDEBAR COMPONENT
+// =============================================================================
+
+/**
+ * Main Sidebar Navigation Component
+ * 
+ * Features:
+ * - Unified route-based navigation
+ * - Site selector
+ * - Collapsible design
+ * - User profile display
+ */
+const Sidebar = ({ collapsed = false, onToggleCollapse }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { sites, currentSiteId, currentSite, selectSite, loading } = useSite();
 
+    // ==========================================================================
+    // NAVIGATION LOGIC
+    // ==========================================================================
+
+    /**
+     * Handle navigation item click
+     * Routes to path or PlannerWorkspace with tab param
+     */
+    const handleNavClick = (item) => {
+        if (item.path) {
+            navigate(item.path);
+        } else if (item.plannerTab) {
+            navigate(`/app/planner?tab=${item.plannerTab}`);
+        }
+    };
+
+    /**
+     * Determine if an item is active based on current location
+     */
+    const isItemActive = useMemo(() => {
+        return (item) => {
+            // Check direct path match
+            if (item.path && location.pathname === item.path) {
+                return true;
+            }
+
+            // Check planner tab match
+            if (item.plannerTab && location.pathname === '/app/planner') {
+                const searchParams = new URLSearchParams(location.search);
+                const currentTab = searchParams.get('tab') || 'reporting';
+                return currentTab === item.plannerTab;
+            }
+
+            return false;
+        };
+    }, [location.pathname, location.search]);
+
+    /**
+     * Handle logout
+     */
     const handleLogout = () => {
         localStorage.removeItem('token');
         navigate('/login');
     };
 
-    return (
-        <div className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full">
-            <div className="p-4 border-b border-slate-800">
-                <h1 className="text-xl font-bold text-white tracking-tight">MineOpt<span className="text-blue-500">Pro</span></h1>
-                <p className="text-xs text-slate-500 mt-1">Enterprise Scheduling</p>
-            </div>
+    // ==========================================================================
+    // RENDER
+    // ==========================================================================
 
-            {/* Site Selector */}
-            <div className="px-4 py-3 border-b border-slate-800">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
-                    Active Site
-                </label>
-                <div className="relative">
-                    <select
-                        value={currentSiteId || ''}
-                        onChange={(e) => selectSite(e.target.value)}
-                        disabled={loading || sites.length === 0}
-                        className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 pr-8 appearance-none cursor-pointer hover:border-slate-600 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+    return (
+        <aside
+            className={clsx(
+                'h-full flex flex-col bg-slate-950 border-r border-slate-800 transition-all duration-300',
+                collapsed ? 'w-16' : 'w-64'
+            )}
+        >
+            {/* Logo & Collapse Toggle */}
+            <div className={clsx(
+                'h-14 flex items-center border-b border-slate-800 px-4',
+                collapsed ? 'justify-center' : 'justify-between'
+            )}>
+                {!collapsed && (
+                    <button
+                        onClick={() => navigate('/app/dashboard')}
+                        className="hover:opacity-80 transition-opacity"
                     >
-                        {loading ? (
-                            <option value="">Loading sites...</option>
-                        ) : sites.length === 0 ? (
-                            <option value="">No sites available</option>
-                        ) : (
-                            sites.map((site) => (
-                                <option key={site.site_id} value={site.site_id}>
-                                    {site.name}
-                                </option>
-                            ))
-                        )}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-                {currentSite && (
-                    <p className="text-xs text-slate-600 mt-1 truncate" title={currentSite.timezone}>
-                        {currentSite.timezone || 'UTC'}
-                    </p>
+                        <h1 className="text-lg font-bold text-white tracking-tight">
+                            MineOpt<span className="text-blue-500">Pro</span>
+                        </h1>
+                        <p className="text-[10px] text-slate-500 -mt-0.5">Enterprise Edition</p>
+                    </button>
+                )}
+
+                {collapsed && (
+                    <button
+                        onClick={() => navigate('/app/dashboard')}
+                        className="hover:opacity-80 transition-opacity"
+                    >
+                        <span className="text-lg font-bold text-blue-500">M</span>
+                    </button>
+                )}
+
+                {onToggleCollapse && (
+                    <button
+                        onClick={onToggleCollapse}
+                        className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-white transition-colors"
+                    >
+                        {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                    </button>
                 )}
             </div>
 
+            {/* Site Selector */}
+            {!collapsed && (
+                <div className="px-4 py-3 border-b border-slate-800">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
+                        Active Site
+                    </label>
+                    <div className="relative">
+                        <select
+                            value={currentSiteId || ''}
+                            onChange={(e) => selectSite(e.target.value)}
+                            disabled={loading || sites.length === 0}
+                            className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 pr-8 appearance-none cursor-pointer hover:border-slate-600 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+                        >
+                            {loading ? (
+                                <option value="">Loading sites...</option>
+                            ) : sites.length === 0 ? (
+                                <option value="">No sites available</option>
+                            ) : (
+                                sites.map((site) => (
+                                    <option key={site.site_id} value={site.site_id}>
+                                        {site.name}
+                                    </option>
+                                ))
+                            )}
+                        </select>
+                        <ChevronDown
+                            size={14}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                        />
+                    </div>
+                    {currentSite && (
+                        <p className="text-xs text-slate-600 mt-1 truncate" title={currentSite.timezone}>
+                            {currentSite.timezone || 'UTC'}
+                        </p>
+                    )}
+                </div>
+            )}
 
-            <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
-                {/* Dashboard */}
-                <SidebarItem icon={Home} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigate('/app/dashboard')} />
-
-                {/* Planning Section */}
-                <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">Planning</div>
-                <SidebarItem icon={Box} label="3D Spatial View" active={activeTab === 'spatial'} onClick={() => setActiveTab('spatial')} />
-                <SidebarItem icon={Calendar} label="Gantt Schedule" active={activeTab === 'gantt'} onClick={() => setActiveTab('gantt')} />
-                <SidebarItem icon={Zap} label="Schedule Control" active={activeTab === 'schedule-control'} onClick={() => setActiveTab('schedule-control')} />
-                <SidebarItem icon={BarChart2} label="Reports" active={activeTab === 'reporting'} onClick={() => setActiveTab('reporting')} />
-
-                {/* Operations Section */}
-                <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">Operations</div>
-                <SidebarItem icon={Truck} label="Fleet Management" active={activeTab === 'fleet'} onClick={() => setActiveTab('fleet')} />
-                <SidebarItem icon={Target} label="Drill & Blast" active={activeTab === 'drill-blast'} onClick={() => setActiveTab('drill-blast')} />
-                <SidebarItem icon={ClipboardList} label="Shift Operations" active={activeTab === 'shift-ops'} onClick={() => setActiveTab('shift-ops')} />
-
-                {/* Monitoring Section */}
-                <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">Monitoring</div>
-                <SidebarItem icon={Mountain} label="Slope Stability" active={activeTab === 'geotech'} onClick={() => setActiveTab('geotech')} />
-                <SidebarItem icon={Wind} label="Environment" active={activeTab === 'environment'} onClick={() => setActiveTab('environment')} />
-
-                {/* Configuration Section */}
-                <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">Configuration</div>
-                <SidebarItem icon={GitBranch} label="Flow Network" active={activeTab === 'flow-editor'} onClick={() => setActiveTab('flow-editor')} />
-                <SidebarItem icon={Package} label="Product Specs" active={activeTab === 'product-specs'} onClick={() => setActiveTab('product-specs')} />
-                <SidebarItem icon={Database} label="Stockpiles" active={activeTab === 'data'} onClick={() => setActiveTab('data')} />
-                <SidebarItem icon={Layers} label="Wash Plant" active={activeTab === 'resources'} onClick={() => setActiveTab('resources')} />
-                <SidebarItem icon={Layers} label="Geology" active={activeTab === 'geology'} onClick={() => setActiveTab('geology')} />
-
-                {/* Data & Integration Section */}
-                <div className="px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4 mb-2">Data & Integration</div>
-                <SidebarItem icon={Upload} label="Import Data" active={activeTab === 'import'} onClick={() => setActiveTab('import')} />
-                <SidebarItem icon={Link} label="Integrations" active={activeTab === 'integrations'} onClick={() => setActiveTab('integrations')} />
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+            {/* Navigation Items */}
+            <nav className="flex-1 py-4 overflow-y-auto">
+                {NAV_SECTIONS.map((section) => (
+                    <div key={section.title} className="mb-4">
+                        {!collapsed && (
+                            <div className="px-4 mb-2 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+                                {section.title}
+                            </div>
+                        )}
+                        {collapsed && (
+                            <div className="mb-2 border-b border-slate-800 mx-4" />
+                        )}
+                        {section.items.map((item) => (
+                            <SidebarItem
+                                key={item.id}
+                                icon={item.icon}
+                                label={item.label}
+                                active={isItemActive(item)}
+                                highlight={item.highlight}
+                                collapsed={collapsed}
+                                onClick={() => handleNavClick(item)}
+                            />
+                        ))}
+                    </div>
+                ))}
             </nav>
 
-            <div className="p-4 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">SU</div>
-                        <div className="text-sm">
-                            <div className="text-white">Super User</div>
-                            <div className="text-slate-500 text-xs">Admin Access</div>
-                        </div>
+            {/* User Profile & Logout */}
+            <div className="border-t border-slate-800 p-3 space-y-2">
+                {/* User Profile */}
+                <div
+                    className={clsx(
+                        'flex items-center gap-3 px-2 py-2 rounded-lg',
+                        'text-sm text-slate-400',
+                        collapsed && 'justify-center'
+                    )}
+                >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                        SU
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors"
-                        title="Logout"
-                    >
-                        <LogOut size={16} />
-                    </button>
+                    {!collapsed && (
+                        <div className="text-left flex-1 min-w-0">
+                            <div className="text-slate-200 text-sm font-medium truncate">Super User</div>
+                            <div className="text-slate-500 text-xs">Administrator</div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Logout Button */}
+                <button
+                    onClick={handleLogout}
+                    className={clsx(
+                        'w-full flex items-center gap-3 px-3 py-2 rounded-lg',
+                        'text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors',
+                        collapsed && 'justify-center'
+                    )}
+                    title="Logout"
+                >
+                    <LogOut size={18} />
+                    {!collapsed && <span>Logout</span>}
+                </button>
             </div>
-        </div>
+        </aside>
     );
 };
 
