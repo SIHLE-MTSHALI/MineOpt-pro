@@ -31,19 +31,43 @@ export function useApp() {
 }
 
 export function AppProvider({ children }) {
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [activeModule, setActiveModule] = useState('spatial');
-    const [theme, setTheme] = useState('dark');
+    // Load initial state from localStorage with fallbacks
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        const stored = localStorage.getItem('mineopt_sidebar_collapsed');
+        return stored === 'true';
+    });
+    const [activeModule, setActiveModule] = useState(() => {
+        return localStorage.getItem('mineopt_active_module') || 'spatial';
+    });
+    const [theme, setTheme] = useState(() => {
+        return localStorage.getItem('mineopt_theme') || 'dark';
+    });
+
+    // Persist state changes to localStorage
+    const handleSetSidebarCollapsed = (collapsed) => {
+        localStorage.setItem('mineopt_sidebar_collapsed', String(collapsed));
+        setSidebarCollapsed(collapsed);
+    };
+
+    const handleSetActiveModule = (module) => {
+        localStorage.setItem('mineopt_active_module', module);
+        setActiveModule(module);
+    };
+
+    const handleSetTheme = (newTheme) => {
+        localStorage.setItem('mineopt_theme', newTheme);
+        setTheme(newTheme);
+    };
 
     const value = {
         sidebarCollapsed,
-        setSidebarCollapsed,
+        setSidebarCollapsed: handleSetSidebarCollapsed,
         activeModule,
-        setActiveModule,
+        setActiveModule: handleSetActiveModule,
         theme,
-        setTheme,
-        toggleSidebar: () => setSidebarCollapsed(!sidebarCollapsed),
-        toggleTheme: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+        setTheme: handleSetTheme,
+        toggleSidebar: () => handleSetSidebarCollapsed(!sidebarCollapsed),
+        toggleTheme: () => handleSetTheme(theme === 'dark' ? 'light' : 'dark'),
     };
 
     return (
@@ -235,7 +259,8 @@ export function AppSidebar() {
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-neutral-800 p-3">
+            <div className="border-t border-neutral-800 p-3 space-y-2">
+                {/* User Profile */}
                 <button
                     className={clsx(
                         'w-full flex items-center gap-3 px-2 py-2 rounded-lg',
@@ -247,11 +272,28 @@ export function AppSidebar() {
                         SU
                     </div>
                     {!sidebarCollapsed && (
-                        <div className="text-left">
+                        <div className="text-left flex-1">
                             <div className="text-neutral-200 text-sm font-medium">Super User</div>
                             <div className="text-neutral-500 text-xs">Administrator</div>
                         </div>
                     )}
+                </button>
+
+                {/* Logout Button */}
+                <button
+                    onClick={() => {
+                        localStorage.removeItem('token');
+                        navigate('/login');
+                    }}
+                    className={clsx(
+                        'w-full flex items-center gap-3 px-2 py-2 rounded-lg',
+                        'text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors',
+                        sidebarCollapsed && 'justify-center'
+                    )}
+                    title="Logout"
+                >
+                    <LogOut size={18} />
+                    {!sidebarCollapsed && <span>Logout</span>}
                 </button>
             </div>
         </aside>

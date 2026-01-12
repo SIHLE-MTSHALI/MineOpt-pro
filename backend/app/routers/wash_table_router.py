@@ -299,6 +299,42 @@ def get_wash_plant_nodes(site_id: Optional[str] = None, db: Session = Depends(ge
     }
 
 
+@router.get("/site/{site_id}")
+def get_wash_plants_by_site(site_id: str, db: Session = Depends(get_db)):
+    """
+    Get wash plant configuration for a site.
+    
+    Returns all WashPlant and Processor type nodes for the given site,
+    along with their configurations.
+    """
+    # Get wash plant nodes (FlowNodes with type 'WashPlant' or 'Processor')
+    nodes = db.query(FlowNode)\
+        .join(FlowNetwork)\
+        .filter(FlowNetwork.site_id == site_id)\
+        .filter(FlowNode.node_type.in_(["WashPlant", "Processor"]))\
+        .all()
+    
+    result = []
+    for node in nodes:
+        config = None
+        if node.wash_plant_config:
+            config = {
+                "wash_plant_id": node.wash_plant_config.config_id,
+                "capacity_tph": node.wash_plant_config.feed_capacity_tph,
+                "yield_fraction": node.wash_plant_config.yield_adjustment_factor
+            }
+        
+        result.append({
+            "node_id": node.node_id,
+            "name": node.name,
+            "node_type": node.node_type,
+            "capacity_tonnes_per_hour": node.wash_plant_config.feed_capacity_tph if node.wash_plant_config else 0,
+            "wash_plant_config": config
+        })
+    
+    return {"wash_plants": result, "site_id": site_id, "count": len(result)}
+
+
 @router.get("/{node_id}/config")
 def get_wash_plant_config(node_id: str, db: Session = Depends(get_db)):
     """Get wash plant configuration."""

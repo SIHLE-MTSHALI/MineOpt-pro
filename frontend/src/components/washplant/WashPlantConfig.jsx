@@ -228,8 +228,10 @@ const WashPlantConfig = ({ siteId }) => {
     const fetchPlants = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`http://localhost:8000/washplant/site/${siteId}`);
-            setPlants(res.data);
+            // Use consolidated wash-plants router
+            const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+            const res = await axios.get(`${API_BASE}/wash-plants/site/${siteId}`);
+            setPlants(res.data.wash_plants || res.data);
             if (res.data.length > 0) {
                 setSelectedPlant(res.data[0]);
                 fetchWashTable(res.data[0].plant_id);

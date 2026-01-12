@@ -17,3 +17,5 @@ dist/
 data/
 *.log
 backend/mineopt_pro.db
+*.db
+

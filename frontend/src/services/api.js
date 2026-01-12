@@ -8,8 +8,8 @@
 
 import axios from 'axios';
 
-// Base API configuration
-const API_BASE_URL = 'http://localhost:8000';
+// Base API configuration - uses environment variable with fallback
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 // Create axios instance with defaults
 const api = axios.create({
@@ -143,7 +143,8 @@ export const stockpileAPI = {
 // ============================================
 export const washPlantAPI = {
     getPlants: async (siteId) => {
-        const response = await api.get(`/washplant/site/${siteId}`);
+        // Using consolidated wash-plants router
+        const response = await api.get(`/wash-plants/site/${siteId}`);
         return response.data;
     },
 
@@ -263,18 +264,33 @@ export const qualityAPI = {
 };
 
 // ============================================
-// Reporting API
+// Analytics API
 // ============================================
-export const reportingAPI = {
-    getDashboard: async (scheduleVersionId) => {
-        const params = scheduleVersionId ? `?schedule_version_id=${scheduleVersionId}` : '';
-        const response = await api.get(`/reporting/dashboard${params}`);
+export const analyticsAPI = {
+    getDashboardSummary: async (siteId) => {
+        const response = await api.get(`/analytics/dashboard-summary?site_id=${siteId}`);
         return response.data;
     },
 
     getCycleTimes: async (resourceId) => {
         const params = resourceId ? `?resource_id=${resourceId}` : '';
         const response = await api.get(`/analytics/cycle-times${params}`);
+        return response.data;
+    },
+
+    getProductivity: async (siteId, startDate, endDate) => {
+        const response = await api.get(`/analytics/productivity?site_id=${siteId}&start_date=${startDate}&end_date=${endDate}`);
+        return response.data;
+    }
+};
+
+// ============================================
+// Reporting API
+// ============================================
+export const reportingAPI = {
+    getDashboard: async (scheduleVersionId) => {
+        const params = scheduleVersionId ? `?schedule_version_id=${scheduleVersionId}` : '';
+        const response = await api.get(`/reporting/dashboard${params}`);
         return response.data;
     },
 

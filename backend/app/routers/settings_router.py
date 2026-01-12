@@ -63,3 +63,58 @@ def update_site_settings(site_id: str, updates: SiteSettingsUpdate, db: Session 
         "site_id": site.site_id,
         "name": site.name
     }
+
+
+# User Preferences Schema
+class UserPreferencesUpdate(BaseModel):
+    theme: Optional[str] = None  # 'dark' or 'light'
+    sidebar_collapsed: Optional[bool] = None
+    default_site_id: Optional[str] = None
+    notifications_enabled: Optional[bool] = None
+    date_format: Optional[str] = None
+    number_format: Optional[str] = None
+
+
+# Simple in-memory store for demo (would be database in production)
+_user_preferences = {}
+
+
+@router.get("/preferences")
+def get_user_preferences():
+    """Get current user preferences."""
+    # In production, this would get preferences from database based on auth token
+    default_prefs = {
+        "theme": "dark",
+        "sidebar_collapsed": False,
+        "default_site_id": None,
+        "notifications_enabled": True,
+        "date_format": "DD/MM/YYYY",
+        "number_format": "en-US"
+    }
+    
+    # Merge with any stored preferences
+    user_id = "default"  # Would come from auth in production
+    stored = _user_preferences.get(user_id, {})
+    
+    return {**default_prefs, **stored}
+
+
+@router.put("/preferences")
+def update_user_preferences(updates: UserPreferencesUpdate):
+    """Update current user preferences."""
+    user_id = "default"  # Would come from auth in production
+    
+    update_data = updates.dict(exclude_unset=True)
+    
+    if user_id not in _user_preferences:
+        _user_preferences[user_id] = {}
+    
+    for key, value in update_data.items():
+        if value is not None:
+            _user_preferences[user_id][key] = value
+    
+    return {
+        "message": "Preferences updated successfully",
+        "preferences": _user_preferences[user_id]
+    }
+

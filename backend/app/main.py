@@ -40,8 +40,7 @@ from .routers import (
     monitoring_router,
     surface_history_router,
     analytics_router,
-    # Missing endpoint routers
-    washplant_router,
+    # Additional routers
     geology_router,
     settings_router,
     resources_router
@@ -110,6 +109,22 @@ async def lifespan(app: FastAPI):
     # Create all database tables on startup
     Base.metadata.create_all(bind=engine)
     print(f"Database initialized with {len(Base.metadata.tables)} tables")
+    
+    # Auto-seed comprehensive demo data if Equipment table is empty
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        equipment_count = db.query(Equipment).count()
+        if equipment_count == 0:
+            print("No equipment found - seeding comprehensive demo data...")
+            from .services import comprehensive_seed_service
+            result = comprehensive_seed_service.seed_all(db)
+            print(f"Seeded: {result.get('sites_created', 0)} sites, {result.get('equipment_created', 0)} equipment")
+    except Exception as e:
+        print(f"Auto-seed skipped: {e}")
+    finally:
+        db.close()
+    
     yield
     # Cleanup on shutdown (if needed)
 
@@ -172,8 +187,7 @@ app.include_router(monitoring_router.router)
 app.include_router(surface_history_router.router)
 app.include_router(analytics_router.router)
 
-# Missing endpoint routers
-app.include_router(washplant_router.router)
+# Additional routers
 app.include_router(geology_router.router)
 app.include_router(settings_router.router)
 app.include_router(resources_router.router)
